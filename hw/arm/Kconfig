@@ -548,3 +548,7 @@ config ARMSSE
     select UNIMP
     select SSE_COUNTER
     select SSE_TIMER
+
+config IPHONE_6SPLUS
+     bool
+     select IPHONE_6SPLUS

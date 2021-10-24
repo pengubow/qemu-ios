@@ -4,26 +4,11 @@
 #include "hw/arm/boot.h"
 #include "exec/address-spaces.h"
 #include "sysemu/reset.h"
+#include "hw/arm/xnu.h"
+#include "hw/arm/xnu_mem.h"
 #include "hw/arm/ipod_touch.h"
 
-#define WATCHDOG_MEM_BASE 0x3E300000
-#define VIC0_MEM_BASE 0x38E00000
-#define VIC1_MEM_BASE 0x38E01000
-#define CLOCK0_MEM_BASE 0x38100000
-#define EIC_MEM_BASE 0x39A00000
-#define SYS_CONTROLLER_MEM_BASE 0x3C500000
-#define SRAM1_MEM_BASE 0x22020000
-#define HDMI_LINK_MEM_BASE 0x3E200000
-#define IIC2_MEM_BASE 0x3E400000
-#define SPI0_MEM_BASE 0x3C300000
-#define CHIPID_MEM_BASE 0x3D100000
-#define GPIO_MEM_BASE 0x3CF00000
-#define GPIOIC_MEM_BASE 0x39700000
-#define TIMER_MEM_BASE 0x3C700000
-#define USBOTG_MEM_BASE 0x38400000
-#define USBPHYS_MEM_BASE 0x3C400000
-
-#define LLB_MEM_BASE 0x22000000
+#define IPOD_TOUCH_PHYS_BASE (0xc0000000)
 
 static void ipod_touch_cpu_setup(MachineState *machine, MemoryRegion **sysmem, ARMCPU **cpu, AddressSpace **nsas)
 {
@@ -55,73 +40,47 @@ static void ipod_touch_cpu_reset(void *opaque)
 
     cpu_reset(cs);
 
-    cpu_set_pc(CPU(cpu), 0x22020000);
-}
-
-static uint32_t align_64k_high(uint32_t addr)
-{
-    return (addr + 0xffffull) & ~0xffffull;
-}
-
-static void allocate_ram(MemoryRegion *top, const char *name, uint32_t addr, uint32_t size)
-{
-        MemoryRegion *sec = g_new(MemoryRegion, 1);
-        memory_region_init_ram(sec, NULL, name, size, &error_fatal);
-        memory_region_add_subregion(top, addr, sec);
-}
-
-static void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *name, uint32_t pa, uint32_t size, void *buf)
-{
-    if (mem) {
-        allocate_ram(mem, name, pa, align_64k_high(size));
-    }
-    address_space_rw(as, pa, MEMTXATTRS_UNSPECIFIED, (uint8_t *)buf, size, 1);
+    cpu_set_pc(CPU(cpu), 0xc00607ec);
 }
 
 static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem, AddressSpace *nsas)
 {
-	// load SecureROM in memory
-    uint8_t *file_data = NULL;
-    unsigned long fsize;
+    uint32_t kernel_low;
+    uint32_t kernel_high;
+    uint32_t virt_base;
+    uint32_t phys_ptr;
+    uint32_t phys_pc;
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
 
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/ipodtouch2/rom2.bin", (char **)&file_data, &fsize, NULL)) {
-        allocate_and_copy(sysmem, nsas, "SecureROM", 0x22020000, fsize, file_data);
-    }
+    macho_file_highest_lowest_base(nms->kernel_filename, IPOD_TOUCH_PHYS_BASE, &virt_base, &kernel_low, &kernel_high);
 
-    // allocate memory for controllers
-    allocate_ram(sysmem, "testz", 0x0, align_64k_high(0x10));
+    g_virt_base = virt_base;
+    g_phys_base = IPOD_TOUCH_PHYS_BASE;
+    phys_ptr = IPOD_TOUCH_PHYS_BASE;
 
-    allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "vic0", VIC0_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "vic1", VIC1_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "clock0", CLOCK0_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "eic", EIC_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "syscontrollers", SYS_CONTROLLER_MEM_BASE, align_64k_high(0x10));
-    //allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x20000);
-    allocate_ram(sysmem, "hdmilink", HDMI_LINK_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "iic2", IIC2_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "spi0", SPI0_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "gpioic", GPIOIC_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "timer", TIMER_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "usbotg", USBOTG_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "usbphys", USBPHYS_MEM_BASE, align_64k_high(0x10));
-    allocate_ram(sysmem, "unknown1", 0xfffffffc, 0x1);
+    printf("Virt base: %08x, kernel lowest: %08x, kernel highest: %08x\n", virt_base, kernel_low, kernel_high);
 
-    // if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/LLB.n45ap.RELEASE", (char **)&file_data, &fsize, NULL)) {
-    //     allocate_ram(sysmem, "llb", LLB_MEM_BASE, 0x20000);
-    //     address_space_rw(nsas, LLB_MEM_BASE, MEMTXATTRS_UNSPECIFIED, file_data, fsize, 1);
-    // }
+    //now account for the loaded kernel
+    arm_load_macho(nms->kernel_filename, nsas, sysmem, "kernel.n45", IPOD_TOUCH_PHYS_BASE, virt_base, kernel_low, kernel_high, &phys_pc);
+    nms->kpc_pa = phys_pc; // TODO unused for now
+}
 
-    // set "UCLKCON" (??) to 1
-    uint8_t val = 0x1;
-    address_space_rw(nsas, 0x3c500040, MEMTXATTRS_UNSPECIFIED, &val, sizeof(val), 1);
+static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    g_strlcpy(nms->kernel_filename, value, sizeof(nms->kernel_filename));
+}
+
+static char *ipod_touch_get_kernel_filename(Object *obj, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    return g_strdup(nms->kernel_filename);
 }
 
 static void ipod_touch_instance_init(Object *obj)
 {
-	// TODO
+	object_property_add_str(obj, "kernel-filename", ipod_touch_get_kernel_filename, ipod_touch_set_kernel_filename);
+    object_property_set_description(obj, "kernel-filename", "Set the kernel filename to be loaded");
 }
 
 static void ipod_touch_machine_init(MachineState *machine)

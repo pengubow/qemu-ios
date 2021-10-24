@@ -22,6 +22,7 @@ typedef struct {
 	MachineState parent;
 	hwaddr kpc_pa;
 	ARMCPU *cpu;
+	char kernel_filename[1024];
 } IPodTouchMachineState;
 
 #endif

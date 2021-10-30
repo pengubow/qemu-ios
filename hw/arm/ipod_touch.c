@@ -9,6 +9,7 @@
 #include "hw/arm/ipod_touch.h"
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
+#define SRAM1_MEM_BASE 0x22020000
 
 static void ipod_touch_cpu_setup(MachineState *machine, MemoryRegion **sysmem, ARMCPU **cpu, AddressSpace **nsas)
 {
@@ -40,6 +41,7 @@ static void ipod_touch_cpu_reset(void *opaque)
 
     cpu_reset(cs);
 
+    env->regs[0] = nms->kbootargs_pa;
     cpu_set_pc(CPU(cpu), 0xc00607ec);
 }
 
@@ -63,6 +65,24 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     //now account for the loaded kernel
     arm_load_macho(nms->kernel_filename, nsas, sysmem, "kernel.n45", IPOD_TOUCH_PHYS_BASE, virt_base, kernel_low, kernel_high, &phys_pc);
     nms->kpc_pa = phys_pc; // TODO unused for now
+
+    phys_ptr = align_64k_high(kernel_high);
+    uint32_t kbootargs_pa = phys_ptr;
+    nms->kbootargs_pa = kbootargs_pa;
+    phys_ptr += align_64k_high(sizeof(struct xnu_arm_boot_args));
+    printf("Loading bootargs at memory location %08x\n", nms->kbootargs_pa);
+
+    // allocate 64k free space for kernel stuff
+    uint32_t top_of_kernel_data_pa = phys_ptr;
+    printf("Top of kernel data: %08x\n", top_of_kernel_data_pa);
+    allocate_ram(sysmem, "n45.extra", phys_ptr, 0x10000);
+    phys_ptr += align_64k_high(0x1);
+    uint32_t mem_size = 0x80000000; // TODO hard-coded
+
+    // load boot args
+    macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa);
+
+    allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x10000);
 }
 
 static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)

@@ -11,6 +11,19 @@ static void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *n
     address_space_rw(as, pa, MEMTXATTRS_UNSPECIFIED, (uint8_t *)buf, size, 1);
 }
 
+void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem, uint32_t bootargs_pa, uint32_t virt_base, uint32_t phys_base, uint32_t mem_size, uint32_t top_of_kernel_data_pa)
+{
+    struct xnu_arm_boot_args boot_args;
+    memset(&boot_args, 0, sizeof(boot_args));
+    boot_args.Revision = xnu_arm_kBootArgsRevision2;
+    boot_args.Version = xnu_arm_kBootArgsVersion3;
+    boot_args.virtBase = virt_base;
+    boot_args.physBase = phys_base;
+    boot_args.memSize = mem_size;
+    boot_args.topOfKernelData = top_of_kernel_data_pa;
+    allocate_and_copy(mem, as, name, bootargs_pa, sizeof(boot_args), &boot_args);
+}
+
 static void macho_highest_lowest(struct mach_header* mh, uint32_t *lowaddr, uint32_t *highaddr)
 {
     struct load_command* cmd = (struct load_command*)((uint8_t*)mh + sizeof(struct mach_header));
@@ -108,8 +121,6 @@ void arm_load_macho(char *filename, AddressSpace *as, MemoryRegion *mem,
     uint32_t low_phys_addr = vtop_bases(low_virt_addr, phys_base, virt_base);
     printf("Copying %s to address %08x (size: %llu bytes)\n", name, low_phys_addr, rom_buf_size);
     allocate_and_copy(mem, as, name, low_phys_addr, rom_buf_size, rom_buf);
-
-    printf("BYTES: %02x\n", rom_buf[0x607ec]);
 
     if (data) {
         g_free(data);

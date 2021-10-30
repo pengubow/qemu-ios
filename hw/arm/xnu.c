@@ -2,6 +2,7 @@
 #include "qemu-common.h"
 #include "hw/arm/xnu.h"
 #include "hw/arm/xnu_mem.h"
+#include "hw/arm/xnu_dtb.h"
 
 static void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *name, uint32_t pa, uint32_t size, void *buf)
 {
@@ -11,7 +12,7 @@ static void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *n
     address_space_rw(as, pa, MEMTXATTRS_UNSPECIFIED, (uint8_t *)buf, size, 1);
 }
 
-void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem, uint32_t bootargs_pa, uint32_t virt_base, uint32_t phys_base, uint32_t mem_size, uint32_t top_of_kernel_data_pa)
+void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem, uint32_t bootargs_pa, uint32_t virt_base, uint32_t phys_base, uint32_t mem_size, uint32_t top_of_kernel_data_pa, uint32_t dtb_va, uint32_t dtb_size, char *kern_args)
 {
     struct xnu_arm_boot_args boot_args;
     memset(&boot_args, 0, sizeof(boot_args));
@@ -21,6 +22,19 @@ void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem,
     boot_args.physBase = phys_base;
     boot_args.memSize = mem_size;
     boot_args.topOfKernelData = top_of_kernel_data_pa;
+
+    boot_args.Video.v_baseAddr = 1234;
+    boot_args.Video.v_display = 1235;
+    boot_args.Video.v_depth = 88;
+
+    // TODO video stuff
+    boot_args.deviceTreeP = dtb_va;
+    boot_args.deviceTreeLength = dtb_size;
+    if (kern_args) {
+        g_strlcpy(boot_args.CommandLine, kern_args, sizeof(boot_args.CommandLine));
+    }
+    // TODO other args
+
     allocate_and_copy(mem, as, name, bootargs_pa, sizeof(boot_args), &boot_args);
 }
 
@@ -127,5 +141,33 @@ void arm_load_macho(char *filename, AddressSpace *as, MemoryRegion *mem,
     }
     if (rom_buf) {
         g_free(rom_buf);
+    }
+}
+
+void macho_load_dtb(char *filename, AddressSpace *as, MemoryRegion *mem, const char *name, uint32_t dtb_pa, uint64_t *size)
+{
+    uint8_t *file_data = NULL;
+    unsigned long fsize;
+
+    if (g_file_get_contents(filename, (char **)&file_data, &fsize, NULL)) {
+        DTBNode *root = load_dtb(file_data);
+
+        // TODO modify etc
+
+        uint64_t size_n = get_dtb_node_buffer_size(root);
+
+        uint8_t *buf = g_malloc0(size_n);
+        save_dtb(buf, root);
+
+        printf("Loading device tree at address %08x (size: %llu bytes)\n", dtb_pa, size_n);
+        allocate_and_copy(mem, as, name, dtb_pa, size_n, buf);
+        g_free(file_data);
+        delete_dtb_node(root);
+        g_free(buf);
+        *size = size_n;
+    }
+    else {
+        printf("Could not get content of device tree %s\n", filename);
+        abort();
     }
 }

@@ -52,6 +52,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     uint32_t virt_base;
     uint32_t phys_ptr;
     uint32_t phys_pc;
+    uint64_t dtb_size;
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
 
     macho_file_highest_lowest_base(nms->kernel_filename, IPOD_TOUCH_PHYS_BASE, &virt_base, &kernel_low, &kernel_high);
@@ -72,17 +73,24 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     phys_ptr += align_64k_high(sizeof(struct xnu_arm_boot_args));
     printf("Loading bootargs at memory location %08x\n", nms->kbootargs_pa);
 
-    // allocate 64k free space for kernel stuff
+    // allocate free space for kernel management (e.g., VM tables)
     uint32_t top_of_kernel_data_pa = phys_ptr;
     printf("Top of kernel data: %08x\n", top_of_kernel_data_pa);
-    allocate_ram(sysmem, "n45.extra", phys_ptr, 0x10000);
-    phys_ptr += align_64k_high(0x1);
-    uint32_t mem_size = 0x80000000; // TODO hard-coded
+    allocate_ram(sysmem, "n45.extra", phys_ptr, 0x300000);
+    phys_ptr += align_64k_high(0x300000);
+    uint32_t mem_size = 0x8000000; // TODO hard-coded
+
+    // load the device tree
+    macho_load_dtb(nms->dtb_filename, nsas, sysmem, "devicetree.45", phys_ptr, &dtb_size);
+    uint32_t dtb_va = phys_ptr;
 
     // load boot args
-    macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa);
+    macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa, dtb_va, dtb_size, nms->kern_args);
 
     allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x10000);
+
+    // allocate UART ram
+    allocate_ram(sysmem, "uart", 0xe0000000, 0x10000);
 }
 
 static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)
@@ -97,10 +105,40 @@ static char *ipod_touch_get_kernel_filename(Object *obj, Error **errp)
     return g_strdup(nms->kernel_filename);
 }
 
+static void ipod_touch_set_dtb_filename(Object *obj, const char *value, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    g_strlcpy(nms->dtb_filename, value, sizeof(nms->dtb_filename));
+}
+
+static char *ipod_touch_get_dtb_filename(Object *obj, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    return g_strdup(nms->dtb_filename);
+}
+
+static void ipod_touch_set_kern_args(Object *obj, const char *value, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    g_strlcpy(nms->kern_args, value, sizeof(nms->kern_args));
+}
+
+static char *ipod_touch_get_kern_args(Object *obj, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    return g_strdup(nms->kern_args);
+}
+
 static void ipod_touch_instance_init(Object *obj)
 {
 	object_property_add_str(obj, "kernel-filename", ipod_touch_get_kernel_filename, ipod_touch_set_kernel_filename);
     object_property_set_description(obj, "kernel-filename", "Set the kernel filename to be loaded");
+
+    object_property_add_str(obj, "dtb-filename", ipod_touch_get_dtb_filename, ipod_touch_set_dtb_filename);
+    object_property_set_description(obj, "dtb-filename", "Set the dev tree filename to be loaded");
+
+    object_property_add_str(obj, "kern-cmd-args", ipod_touch_get_kern_args, ipod_touch_set_kern_args);
+    object_property_set_description(obj, "kern-cmd-args", "Set the XNU kernel cmd args");
 }
 
 static void ipod_touch_machine_init(MachineState *machine)

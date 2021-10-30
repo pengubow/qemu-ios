@@ -24,6 +24,8 @@ typedef struct {
 	uint32_t kbootargs_pa;
 	ARMCPU *cpu;
 	char kernel_filename[1024];
+	char dtb_filename[1024];
+	char kern_args[256];
 } IPodTouchMachineState;
 
 #endif

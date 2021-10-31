@@ -21,6 +21,21 @@
 #define CLOCK1_PLLLOCK 0x40
 #define CLOCK1_PLLMODE 0x44
 
+// timer stuff
+#define TIMER_IRQSTAT 0x10000
+#define TIMER_IRQLATCH 0xF8
+#define TIMER_TICKSHIGH 0x80
+#define TIMER_TICKSLOW 0x84
+#define TIMER_STATE_START 1
+#define TIMER_STATE_STOP 0
+#define TIMER_STATE_MANUALUPDATE 2
+#define NUM_TIMERS 7
+#define TIMER_4 0xA0
+#define TIMER_CONFIG 0 
+#define TIMER_STATE 0x4
+#define TIMER_COUNT_BUFFER 0x8
+#define TIMER_COUNT_BUFFER2 0xC
+
 typedef struct {
     MachineClass parent;
 } IPodTouchMachineClass;
@@ -38,11 +53,33 @@ typedef struct s5l8900_clk1_s
 
 } s5l8900_clk1_s;
 
+typedef struct s5l8900_timer_s
+{
+    uint32_t    ticks_high;
+	uint32_t	ticks_low;
+	uint32_t 	status;
+	uint32_t    config;
+	uint32_t    bcount1;
+	uint32_t    bcount2;
+	uint32_t    prescaler;
+	uint32_t    irqstat;
+    QEMUTimer *st_timer;
+	uint32_t bcreload;
+    uint32_t freq_out;
+    uint64_t tick_interval;
+    uint64_t last_tick;
+    uint64_t next_planned_tick;
+    uint64_t base_time;
+	qemu_irq	irq;
+
+} s5l8900_timer_s;
+
 typedef struct {
 	MachineState parent;
 	qemu_irq **irq;
 	PL192State vic0;
 	PL192State vic1;
+	s5l8900_timer_s timer1;
 	s5l8900_clk1_s clock1;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

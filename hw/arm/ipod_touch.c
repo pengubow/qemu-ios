@@ -4,6 +4,7 @@
 #include "hw/arm/boot.h"
 #include "exec/address-spaces.h"
 #include "hw/misc/unimp.h"
+#include "hw/irq.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/reset.h"
 #include "hw/arm/xnu.h"
@@ -79,13 +80,101 @@ static void ipod_touch_cpu_reset(void *opaque)
     //cpu_set_pc(CPU(cpu), IBOOT_BASE);
 }
 
-static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+static void s5l8900_st_update(s5l8900_timer_s *s)
 {
-    // TODO
+    s->freq_out = 1000000000 / 100; 
+    s->tick_interval = /* bcount1 * get_ticks / freq  + ((bcount2 * get_ticks / freq)*/
+    muldiv64((s->bcount1 < 1000) ? 1000 : s->bcount1, NANOSECONDS_PER_SECOND, s->freq_out);
+    s->next_planned_tick = 0;
+}
+
+static void s5l8900_st_set_timer(s5l8900_timer_s *s)
+{
+    uint64_t last = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) - s->base_time;
+
+    s->next_planned_tick = last + (s->tick_interval - last % s->tick_interval);
+    timer_mod(s->st_timer, s->next_planned_tick + s->base_time);
+    s->last_tick = last;
+}
+
+static void s5l8900_st_tick(void *opaque)
+{
+    s5l8900_timer_s *s = (s5l8900_timer_s *)opaque;
+
+    if (s->status & TIMER_STATE_START) {
+        //fprintf(stderr, "%s: Raising irq\n", __func__);
+        qemu_irq_raise(s->irq);
+
+        /* schedule next interrupt */
+        s5l8900_st_set_timer(s);
+    } else {
+        s->next_planned_tick = 0;
+        s->last_tick = 0;
+        timer_del(s->st_timer);
+    }
+}
+
+static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+    s5l8900_timer_s *s = (struct s5l8900_timer_s *) opaque;
+
+    switch(addr){
+
+        case TIMER_IRQSTAT:
+            s->irqstat = value;
+            return;
+        case TIMER_IRQLATCH:
+            //fprintf(stderr, "%s: lowering irq\n", __func__);
+            qemu_irq_lower(s->irq);     
+            return;
+        case TIMER_4 + TIMER_CONFIG:
+            s5l8900_st_update(s);
+            s->config = value;
+            break;
+        case TIMER_4 + TIMER_STATE:
+            if ((value & TIMER_STATE_START) > (s->status & TIMER_STATE_START)) {
+                s->base_time = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+                s5l8900_st_update(s);
+                s5l8900_st_set_timer(s);
+            } else if ((value & TIMER_STATE_START) < (s->status & TIMER_STATE_START)) {
+                timer_del(s->st_timer);
+            }
+            s->status = value;
+            break;
+        case TIMER_4 + TIMER_COUNT_BUFFER:
+            s->bcount1 = s->bcreload = value;
+            break;
+        case TIMER_4 + TIMER_COUNT_BUFFER2:
+            s->bcount2 = value;
+            break;
+      default:
+        break;
+    }
+
+    return;
 }
 
 static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
 {
+    s5l8900_timer_s *s = (struct s5l8900_timer_s *) opaque;
+    uint64_t ticks;
+
+    switch (addr) {
+        case TIMER_TICKSHIGH:    // needs to be fixed so that read from low first works as well
+            ticks = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+            s->ticks_high = (ticks >> 32);
+            s->ticks_low = (ticks & 0xFFFFFFFF);
+            return s->ticks_high;
+        case TIMER_TICKSLOW:
+            return s->ticks_low;
+        case TIMER_IRQSTAT:
+            return s->irqstat;
+        case TIMER_IRQLATCH:
+            return 0xffffffff;
+
+      default:
+        break;
+    }
     return 0;
 }
 
@@ -97,13 +186,11 @@ static const MemoryRegionOps timer1_ops = {
 
 static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
-    printf("HERE2\n");
     // Do nothing
 }
 
 static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
 {
-    printf("HERE1\n");
     s5l8900_clk1_s *s = (struct s5l8900_clk1_s *) opaque;
 
     switch (addr) {
@@ -138,6 +225,19 @@ static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
     memory_region_init_io(iomem, OBJECT(nms), &clock1_ops, nms, "clock1", 0x1000);
     memory_region_add_subregion(sysmem, CLOCK1_MEM_BASE, iomem);
+}
+
+static void ipod_touch_init_timer(MachineState *machine, MemoryRegion *sysmem)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
+    nms->timer1 = *(s5l8900_timer_s *) g_malloc0(sizeof(struct s5l8900_timer_s));
+    nms->timer1.irq = nms->irq[0][7];
+    nms->timer1.base_time = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    nms->timer1.st_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, s5l8900_st_tick, &nms->timer1);
+
+    MemoryRegion *iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(nms), &timer1_ops, nms, "timer1", 0x1000);
+    memory_region_add_subregion(sysmem, TIMER1_MEM_BASE, iomem);
 }
 
 static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem, AddressSpace *nsas)
@@ -219,8 +319,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "uart2", UART2_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart3", UART3_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart4", UART4_MEM_BASE, align_64k_high(0x4000));
-
-    allocate_ram(sysmem, "timer1", TIMER1_MEM_BASE, align_64k_high(0x1));
 
     // set the security epoch
     uint32_t security_epoch = 0x2000000;
@@ -307,6 +405,9 @@ static void ipod_touch_machine_init(MachineState *machine)
 
     // init clock
     ipod_touch_init_clock(machine, sysmem);
+
+    // init timer
+    ipod_touch_init_timer(machine, sysmem);
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
 

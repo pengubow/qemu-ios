@@ -86,7 +86,6 @@ static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t val, unsign
 
 static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
 {
-    // TODO
     return 0;
 }
 
@@ -151,8 +150,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
          address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
 
-    allocate_ram(sysmem, "vic0", VIC0_MEM_BASE, 0x1000);
-    allocate_ram(sysmem, "vic1", VIC1_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "unknown2", UNKNOWN2_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "unknown3", UNKNOWN3_MEM_BASE, 0x10000);
@@ -179,22 +176,11 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "uart3", UART3_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart4", UART4_MEM_BASE, align_64k_high(0x4000));
 
-    // setup MMIO
-    MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, NULL, &timer1_ops, NULL, "timer1", 0x10000);
-    memory_region_add_subregion(sysmem, TIMER1_MEM_BASE, iomem);
+    allocate_ram(sysmem, "timer1", TIMER1_MEM_BASE, align_64k_high(0x1));
 
     // set the security epoch
     uint32_t security_epoch = 0x2000000;
     address_space_rw(nsas, EIC_MEM_BASE+0x44, MEMTXATTRS_UNSPECIFIED, (uint8_t *) &security_epoch, sizeof(security_epoch), 1);
-
-    // write the VIC identification registers
-    uint8_t value = 0x92;
-    address_space_rw(nsas, VIC0_MEM_BASE+0xFE0, MEMTXATTRS_UNSPECIFIED, (uint8_t *) &value, sizeof(value), 1);
-    address_space_rw(nsas, VIC1_MEM_BASE+0xFE0, MEMTXATTRS_UNSPECIFIED, (uint8_t *) &value, sizeof(value), 1);
-    value = 0x1;
-    address_space_rw(nsas, VIC0_MEM_BASE+0xFE4, MEMTXATTRS_UNSPECIFIED, (uint8_t *) &value, sizeof(value), 1);
-    address_space_rw(nsas, VIC1_MEM_BASE+0xFE4, MEMTXATTRS_UNSPECIFIED, (uint8_t *) &value, sizeof(value), 1);
 }
 
 static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)
@@ -245,40 +231,37 @@ static void ipod_touch_instance_init(Object *obj)
     object_property_set_description(obj, "kern-cmd-args", "Set the XNU kernel cmd args");
 }
 
-static void ipod_touch_create_s3c_uart(const IPodTouchMachineState *nms, Chardev *chr)
-{
-    qemu_irq irq;
-    DeviceState *d;
-    SysBusDevice *s;
-    uint32_t base = nms->uart_mmio_pa;
-
-    //hack for now. create a device that is not used just to have a dummy
-    //unused interrupt
-    d = qdev_new(TYPE_PLATFORM_BUS_DEVICE);
-    s = SYS_BUS_DEVICE(d);
-    sysbus_init_irq(s, &irq);
-    //pass a dummy irq as we don't need nor want interrupts for this UART
-    DeviceState *dev = exynos4210_uart_create(base, 256, 0, chr, irq);
-    if (!dev) {
-        abort();
-    }
-}
-
 static void ipod_touch_machine_init(MachineState *machine)
 {
 	IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
 	MemoryRegion *sysmem;
     AddressSpace *nsas;
     ARMCPU *cpu;
-    DeviceState *cpudev;
 
     ipod_touch_cpu_setup(machine, &sysmem, &cpu, &nsas);
 
     nms->cpu = cpu;
 
-    ipod_touch_memory_setup(machine, sysmem, nsas);
+    // setup VICs
+    nms->irq = g_malloc0(sizeof(qemu_irq *) * 2);
+    DeviceState *dev = pl192_manual_init("vic0");
+    PL192State *s = PL192(dev);
+    nms->vic0 = *s;
+    memory_region_add_subregion(sysmem, VIC0_MEM_BASE, &nms->vic0.iomem);
+    nms->irq[0] = g_malloc0(sizeof(qemu_irq) * 32);
+    for (int i = 0; i < 32; i++) { nms->irq[0][i] = qdev_get_gpio_in(dev, i); }
 
-    ipod_touch_create_s3c_uart(nms, serial_hd(0));
+    dev = pl192_manual_init("vic1");
+    s = PL192(dev);
+    nms->vic1 = *s;
+    memory_region_add_subregion(sysmem, VIC1_MEM_BASE, &nms->vic1.iomem);
+    nms->irq[1] = g_malloc0(sizeof(qemu_irq) * 32);
+    for (int i = 0; i < 32; i++) { nms->irq[1][i] = qdev_get_gpio_in(dev, i); }
+
+    // // chain VICs together
+    nms->vic1.daisy = &nms->vic0;
+
+    ipod_touch_memory_setup(machine, sysmem, nsas);
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
 }

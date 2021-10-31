@@ -553,3 +553,4 @@ config ARMSSE
 config IPOD_TOUCH
     bool
     select IPOD_TOUCH
+    select PL192

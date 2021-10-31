@@ -5,6 +5,7 @@
 #include "exec/hwaddr.h"
 #include "hw/boards.h"
 #include "hw/arm/boot.h"
+#include "hw/intc/pl192.h"
 #include "cpu.h"
 
 #define TYPE_IPOD_TOUCH "iPod-Touch"
@@ -20,6 +21,9 @@ typedef struct {
 
 typedef struct {
 	MachineState parent;
+	qemu_irq **irq;
+	PL192State vic0;
+	PL192State vic1;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;
 	uint32_t uart_mmio_pa;

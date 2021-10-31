@@ -16,8 +16,8 @@
 #define IBOOT_BASE 0x18000000
 #define SRAM1_MEM_BASE 0x22020000
 #define CLOCK0_MEM_BASE 0x38100000
+#define CLOCK1_MEM_BASE 0x3C500000
 #define EIC_MEM_BASE 0x39A00000
-#define SYS_CONTROLLER_MEM_BASE 0x3C500000
 #define VIC0_MEM_BASE 0x38E00000
 #define VIC1_MEM_BASE 0x38E01000
 #define UNKNOWN1_MEM_BASE 0x38E02000
@@ -95,6 +95,51 @@ static const MemoryRegionOps timer1_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
+static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    printf("HERE2\n");
+    // Do nothing
+}
+
+static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
+{
+    printf("HERE1\n");
+    s5l8900_clk1_s *s = (struct s5l8900_clk1_s *) opaque;
+
+    switch (addr) {
+        case CLOCK1_CONFIG0:
+            return s->clk1_config0;
+        case CLOCK1_CONFIG1:
+            return s->clk1_config1;
+        case CLOCK1_CONFIG2:
+            return s->clk1_config2;
+        case CLOCK1_PLLLOCK:
+            return 1;
+        case CLOCK1_PLLMODE:
+            return s->clk1_pllmode;
+    
+      default:
+            break;
+    }
+    return 0;
+}
+
+static const MemoryRegionOps clock1_ops = {
+    .read = s5l8900_clock1_read,
+    .write = s5l8900_clock1_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
+    nms->clock1 = *(s5l8900_clk1_s *) g_malloc0(sizeof(struct s5l8900_clk1_s));
+
+    MemoryRegion *iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(nms), &clock1_ops, nms, "clock1", 0x1000);
+    memory_region_add_subregion(sysmem, CLOCK1_MEM_BASE, iomem);
+}
+
 static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem, AddressSpace *nsas)
 {
     uint32_t kernel_low;
@@ -157,7 +202,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     //allocate_ram(sysmem, "unknown5", UNKNOWN5_MEM_BASE, 0x100000);
     allocate_ram(sysmem, "clock0", CLOCK0_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "eic", EIC_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "syscontrollers", SYS_CONTROLLER_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "usbotg", USBOTG_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "usbphys", USBPHYS_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
@@ -260,6 +304,9 @@ static void ipod_touch_machine_init(MachineState *machine)
 
     // // chain VICs together
     nms->vic1.daisy = &nms->vic0;
+
+    // init clock
+    ipod_touch_init_clock(machine, sysmem);
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
 

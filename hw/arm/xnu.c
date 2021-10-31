@@ -4,7 +4,7 @@
 #include "hw/arm/xnu_mem.h"
 #include "hw/arm/xnu_dtb.h"
 
-static void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *name, uint32_t pa, uint32_t size, void *buf)
+void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *name, uint32_t pa, uint32_t size, void *buf)
 {
     if (mem) {
         allocate_ram(mem, name, pa, align_64k_high(size));
@@ -144,7 +144,7 @@ void arm_load_macho(char *filename, AddressSpace *as, MemoryRegion *mem,
     }
 }
 
-void macho_load_dtb(char *filename, AddressSpace *as, MemoryRegion *mem, const char *name, uint32_t dtb_pa, uint64_t *size)
+void macho_load_dtb(char *filename, AddressSpace *as, MemoryRegion *mem, const char *name, uint32_t dtb_pa, uint64_t *size, uint32_t *uart_mmio_pa)
 {
     uint8_t *file_data = NULL;
     unsigned long fsize;
@@ -152,7 +152,98 @@ void macho_load_dtb(char *filename, AddressSpace *as, MemoryRegion *mem, const c
     if (g_file_get_contents(filename, (char **)&file_data, &fsize, NULL)) {
         DTBNode *root = load_dtb(file_data);
 
-        // TODO modify etc
+        //first fetch the uart mmio address
+        DTBNode *child = get_dtb_child_node_by_name(root, "arm-io");
+        if (NULL == child) {
+            abort();
+        }
+        DTBProp *prop = get_dtb_prop(child, "ranges");
+        if (NULL == prop) {
+            abort();
+        }
+        hwaddr *ranges = (hwaddr *)prop->value;
+        hwaddr soc_base_pa = ranges[1];
+        child = get_dtb_child_node_by_name(child, "uart0");
+        if (NULL == child) {
+            abort();
+        }
+        //make sure this node has the boot-console prop
+        prop = get_dtb_prop(child, "boot-console");
+        if (NULL == prop) {
+            abort();
+        }
+        prop = get_dtb_prop(child, "reg");
+        if (NULL == prop) {
+            abort();
+        }
+        hwaddr *uart_offset = (hwaddr *)prop->value;
+        if (NULL != uart_mmio_pa) {
+            *uart_mmio_pa = soc_base_pa + uart_offset[0];
+        }
+
+        // setup cpu frequencies
+        child = get_dtb_child_node_by_name(root, "cpus");
+        if (NULL == child) {
+            abort();
+        }
+        child = get_dtb_child_node_by_name(child, "cpu0");
+        if (NULL == child) {
+            abort();
+        }
+
+        // timebase
+        uint32_t timebase_freq = 6000000;
+        prop = get_dtb_prop(child, "timebase-frequency");
+        if (NULL == prop) {
+            abort();
+        }
+        remove_dtb_prop(child, prop);
+        add_dtb_prop(child, "timebase-frequency", sizeof(uint32_t), (uint8_t *)&timebase_freq);
+        
+        // fixed
+        uint32_t fixed_freq = 24000000;
+        prop = get_dtb_prop(child, "fixed-frequency");
+        if (NULL == prop) {
+            abort();
+        }
+        remove_dtb_prop(child, prop);
+        add_dtb_prop(child, "fixed-frequency", sizeof(uint32_t), (uint8_t *)&fixed_freq);
+
+        // clock
+        uint32_t clock_freq = 412000000;
+        prop = get_dtb_prop(child, "clock-frequency");
+        if (NULL == prop) {
+            abort();
+        }
+        remove_dtb_prop(child, prop);
+        add_dtb_prop(child, "clock-frequency", sizeof(uint32_t), (uint8_t *)&clock_freq);
+
+        // bus
+        uint32_t bus_freq = 103000000;
+        prop = get_dtb_prop(child, "bus-frequency");
+        if (NULL == prop) {
+            abort();
+        }
+        remove_dtb_prop(child, prop);
+        add_dtb_prop(child, "bus-frequency", sizeof(uint32_t), (uint8_t *)&bus_freq);
+
+        // peripheral
+        uint32_t peripheral_freq = 51500000;
+        prop = get_dtb_prop(child, "peripheral-frequency");
+        if (NULL == prop) {
+            abort();
+        }
+        remove_dtb_prop(child, prop);
+        add_dtb_prop(child, "peripheral-frequency", sizeof(uint32_t), (uint8_t *)&peripheral_freq);
+
+        // memory
+        uint32_t memory_freq = 137333333;
+        prop = get_dtb_prop(child, "memory-frequency");
+        if (NULL == prop) {
+            abort();
+        }
+        remove_dtb_prop(child, prop);
+        add_dtb_prop(child, "memory-frequency", sizeof(uint32_t), (uint8_t *)&memory_freq);
 
         uint64_t size_n = get_dtb_node_buffer_size(root);
 

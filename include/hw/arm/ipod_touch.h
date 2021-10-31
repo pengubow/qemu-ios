@@ -22,6 +22,7 @@ typedef struct {
 	MachineState parent;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;
+	uint32_t uart_mmio_pa;
 	ARMCPU *cpu;
 	char kernel_filename[1024];
 	char dtb_filename[1024];

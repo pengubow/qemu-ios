@@ -12,7 +12,7 @@ void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *name, ui
     address_space_rw(as, pa, MEMTXATTRS_UNSPECIFIED, (uint8_t *)buf, size, 1);
 }
 
-void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem, uint32_t bootargs_pa, uint32_t virt_base, uint32_t phys_base, uint32_t mem_size, uint32_t top_of_kernel_data_pa, uint32_t dtb_va, uint32_t dtb_size, char *kern_args)
+void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem, uint32_t bootargs_pa, uint32_t virt_base, uint32_t phys_base, uint32_t mem_size, uint32_t top_of_kernel_data_pa, uint32_t dtb_va, uint32_t dtb_size, char *kern_args, uint32_t framebuffer_addr)
 {
     struct xnu_arm_boot_args boot_args;
     memset(&boot_args, 0, sizeof(boot_args));
@@ -23,9 +23,12 @@ void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem,
     boot_args.memSize = mem_size;
     boot_args.topOfKernelData = top_of_kernel_data_pa;
 
-    boot_args.Video.v_baseAddr = 1234;
-    boot_args.Video.v_display = 1235;
-    boot_args.Video.v_depth = 88;
+    boot_args.Video.v_baseAddr = framebuffer_addr; // TODO move this to a separate section!
+    boot_args.Video.v_display = 0;
+    boot_args.Video.v_depth = 16;
+    boot_args.Video.v_width = 320;
+    boot_args.Video.v_height = 480;
+    boot_args.Video.v_rowBytes = 3 * 320;
 
     // TODO video stuff
     boot_args.deviceTreeP = dtb_va;

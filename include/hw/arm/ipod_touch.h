@@ -79,8 +79,8 @@ typedef struct {
 	qemu_irq **irq;
 	PL192State vic0;
 	PL192State vic1;
-	s5l8900_timer_s timer1;
-	s5l8900_clk1_s clock1;
+	s5l8900_clk1_s *clock1;
+	s5l8900_timer_s *timer1;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;
 	uint32_t uart_mmio_pa;

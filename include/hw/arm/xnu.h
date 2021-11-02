@@ -66,7 +66,7 @@ struct xnu_arm_boot_args {
 };
 
 void allocate_and_copy(MemoryRegion *mem, AddressSpace *as, const char *name, uint32_t pa, uint32_t size, void *buf);
-void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem, uint32_t bootargs_pa, uint32_t virt_base, uint32_t phys_base, uint32_t mem_size, uint32_t top_of_kernel_data_pa, uint32_t dtb_va, uint32_t dtb_size, char *kern_args);
+void macho_setup_bootargs(const char *name, AddressSpace *as, MemoryRegion *mem, uint32_t bootargs_pa, uint32_t virt_base, uint32_t phys_base, uint32_t mem_size, uint32_t top_of_kernel_data_pa, uint32_t dtb_va, uint32_t dtb_size, char *kern_args, uint32_t framebuffer_addr);
 void macho_file_highest_lowest_base(const char *filename, uint32_t phys_base, uint32_t *virt_base, uint32_t *lowest, uint32_t *highest);
 void arm_load_macho(char *filename, AddressSpace *as, MemoryRegion *mem, const char *name, uint32_t phys_base, uint32_t virt_base, uint32_t low_virt_addr, uint32_t high_virt_addr, uint32_t *pc);
 void macho_load_dtb(char *filename, AddressSpace *as, MemoryRegion *mem, const char *name, uint32_t dtb_pa, uint64_t *size, uint32_t *uart_mmio_pa);

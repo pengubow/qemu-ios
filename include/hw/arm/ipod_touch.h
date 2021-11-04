@@ -6,6 +6,7 @@
 #include "hw/boards.h"
 #include "hw/arm/boot.h"
 #include "hw/intc/pl192.h"
+#include "hw/arm/ipod_touch_uart.h"
 #include "cpu.h"
 
 #define TYPE_IPOD_TOUCH "iPod-Touch"
@@ -35,6 +36,8 @@
 #define TIMER_STATE 0x4
 #define TIMER_COUNT_BUFFER 0x8
 #define TIMER_COUNT_BUFFER2 0xC
+
+#define POWER_ID 0x44
 
 typedef struct {
     MachineClass parent;
@@ -79,6 +82,7 @@ typedef struct {
 	qemu_irq **irq;
 	PL192State vic0;
 	PL192State vic1;
+	S5L8900UartState *uart0;
 	s5l8900_clk1_s *clock1;
 	s5l8900_timer_s *timer1;
 	uint32_t kpc_pa;
@@ -88,6 +92,7 @@ typedef struct {
 	char kernel_filename[1024];
 	char dtb_filename[1024];
 	char kern_args[256];
+	uint64_t printf_buffer[256];
 } IPodTouchMachineState;
 
 #endif

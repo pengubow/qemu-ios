@@ -371,11 +371,23 @@ static const MemoryRegionOps pl192_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-DeviceState *pl192_manual_init(char *mem_name)
+DeviceState *pl192_manual_init(char *mem_name, ...)
 {
     DeviceState *dev = qdev_new(TYPE_PL192);
     PL192State *s = PL192(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    va_list va;
+    qemu_irq irq;
+
+    va_start(va, mem_name);
+    int n = 0;
+    while (1) {
+        irq = va_arg(va, qemu_irq);
+        if (!irq)
+            break;
+        sysbus_connect_irq(sbd, n, irq);
+        n++;
+    }
 
     memory_region_init_io(&s->iomem, OBJECT(s), &pl192_ops, s, mem_name, 0x1000);
     sysbus_init_mmio(sbd, &s->iomem);

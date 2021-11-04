@@ -45,8 +45,9 @@ static void pl192_raise(PL192State *s, int is_fiq)
                 s->daisy->daisy_input = 1;
                 pl192_update(s->daisy);
             } else {
-                hw_error("pl192: cannot raise IRQ. This usually means that "
-                         "initialization was done incorrectly.\n");
+                // TODO Needs urgent fixing!
+                //hw_error("pl192: cannot raise IRQ. This usually means that "
+                //         "initialization was done incorrectly.\n");
             }
         }
     }

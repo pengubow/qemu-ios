@@ -356,7 +356,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     phys_ptr += align_64k_high(dtb_size);
 
     // allocate framebuffer memory
-    allocate_ram(sysmem, "framebuffer", 0xFE000000, align_64k_high(3 * 320 * 480));
+    allocate_ram(sysmem, "framebuffer", phys_ptr, align_64k_high(3 * 320 * 480));
 
     // load boot args
     macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa, dtb_va, dtb_size, nms->kern_args, phys_ptr);
@@ -365,6 +365,9 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     // allocate UART ram
     //allocate_ram(sysmem, "uart", 0xe0000000, 0x20000);
+
+    uint32_t start = 0xf000000;
+    allocate_ram(sysmem, "unknown??", start, 0x10000000 - start);
 
     // load iBoot
     uint8_t *file_data = NULL;
@@ -402,10 +405,12 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "uart3", UART3_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart4", UART4_MEM_BASE, align_64k_high(0x4000));
 
+    allocate_ram(sysmem, "iboot_framebuffer", 0xfe000000, align_64k_high(3 * 320 * 480));
+
     // intercept printf writes
-    MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(nms), &printf_ops, nms, "printf", 0x100);
-    memory_region_add_subregion(sysmem, 0x18022858, iomem);
+    // MemoryRegion *iomem = g_new(MemoryRegion, 1);
+    // memory_region_init_io(iomem, OBJECT(nms), &printf_ops, nms, "printf", 0x100);
+    // memory_region_add_subregion(sysmem, 0x18022858, iomem);
 }
 
 static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)

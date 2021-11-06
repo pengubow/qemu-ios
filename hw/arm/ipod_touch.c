@@ -26,6 +26,7 @@
 #define UNKNOWN2_MEM_BASE 0x3D400000
 #define UNKNOWN3_MEM_BASE 0x24000000
 #define TIMER1_MEM_BASE 0x3E200000
+#define TIMER2_MEM_BASE 0x3E210000
 #define USBOTG_MEM_BASE 0x38400000
 #define USBPHYS_MEM_BASE 0x3C400000
 #define GPIO_MEM_BASE 0x3E400000
@@ -76,8 +77,8 @@ static void ipod_touch_cpu_reset(void *opaque)
     cpu_reset(cs);
 
     env->regs[0] = nms->kbootargs_pa;
-    //cpu_set_pc(CPU(cpu), 0xc00607ec);
-    cpu_set_pc(CPU(cpu), IBOOT_BASE);
+    cpu_set_pc(CPU(cpu), 0xc00607ec);
+    //cpu_set_pc(CPU(cpu), IBOOT_BASE);
     //cpu_set_pc(CPU(cpu), LLB_BASE);
 }
 
@@ -400,6 +401,8 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "rtc", RTC_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "display", DISPLAY_MEM_BASE, align_64k_high(0x1));
 
+    allocate_ram(sysmem, "timer2", TIMER2_MEM_BASE, align_64k_high(0x1));
+
     allocate_ram(sysmem, "uart1", UART1_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart2", UART2_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart3", UART3_MEM_BASE, align_64k_high(0x4000));
@@ -474,22 +477,22 @@ static void ipod_touch_machine_init(MachineState *machine)
 
     // setup VICs
     nms->irq = g_malloc0(sizeof(qemu_irq *) * 2);
-    DeviceState *dev = pl192_manual_init("vic0", ARM_CPU_IRQ, ARM_CPU_FIQ, NULL);
+    DeviceState *dev = pl192_manual_init("vic0", qdev_get_gpio_in(DEVICE(nms->cpu), ARM_CPU_IRQ), qdev_get_gpio_in(DEVICE(nms->cpu), ARM_CPU_FIQ), NULL);
     PL192State *s = PL192(dev);
-    nms->vic0 = *s;
-    memory_region_add_subregion(sysmem, VIC0_MEM_BASE, &nms->vic0.iomem);
+    nms->vic0 = s;
+    memory_region_add_subregion(sysmem, VIC0_MEM_BASE, &nms->vic0->iomem);
     nms->irq[0] = g_malloc0(sizeof(qemu_irq) * 32);
     for (int i = 0; i < 32; i++) { nms->irq[0][i] = qdev_get_gpio_in(dev, i); }
 
     dev = pl192_manual_init("vic1", NULL);
     s = PL192(dev);
-    nms->vic1 = *s;
-    memory_region_add_subregion(sysmem, VIC1_MEM_BASE, &nms->vic1.iomem);
+    nms->vic1 = s;
+    memory_region_add_subregion(sysmem, VIC1_MEM_BASE, &nms->vic1->iomem);
     nms->irq[1] = g_malloc0(sizeof(qemu_irq) * 32);
     for (int i = 0; i < 32; i++) { nms->irq[1][i] = qdev_get_gpio_in(dev, i); }
 
     // // chain VICs together
-    nms->vic1.daisy = &nms->vic0;
+    nms->vic1->daisy = nms->vic0;
 
     // init clock
     ipod_touch_init_clock(machine, sysmem);

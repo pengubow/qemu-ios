@@ -80,8 +80,8 @@ typedef struct s5l8900_timer_s
 typedef struct {
 	MachineState parent;
 	qemu_irq **irq;
-	PL192State vic0;
-	PL192State vic1;
+	PL192State *vic0;
+	PL192State *vic1;
 	S5L8900UartState *uart0;
 	s5l8900_clk1_s *clock1;
 	s5l8900_timer_s *timer1;

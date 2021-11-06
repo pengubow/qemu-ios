@@ -46,8 +46,7 @@ static void pl192_raise(PL192State *s, int is_fiq)
                 pl192_update(s->daisy);
             } else {
                 // TODO Needs urgent fixing!
-                //hw_error("pl192: cannot raise IRQ. This usually means that "
-                //         "initialization was done incorrectly.\n");
+                hw_error("pl192: cannot raise IRQ. This usually means that initialization was done incorrectly.\n");
             }
         }
     }
@@ -380,22 +379,23 @@ DeviceState *pl192_manual_init(char *mem_name, ...)
     va_list va;
     qemu_irq irq;
 
-    va_start(va, mem_name);
-    int n = 0;
-    while (1) {
-        irq = va_arg(va, qemu_irq);
-        if (!irq)
-            break;
-        sysbus_connect_irq(sbd, n, irq);
-        n++;
-    }
-
     memory_region_init_io(&s->iomem, OBJECT(s), &pl192_ops, s, mem_name, 0x1000);
     sysbus_init_mmio(sbd, &s->iomem);
     qdev_init_gpio_in(dev, pl192_irq_handler, PL192_INT_SOURCES);
     sysbus_init_irq(sbd, &s->irq);
     sysbus_init_irq(sbd, &s->fiq);
     sysbus_realize_and_unref(sbd, &error_fatal);
+
+    va_start(va, mem_name);
+    int n = 0;
+    while (1) {
+        irq = va_arg(va, qemu_irq);
+        if (!irq) {
+            break;
+        }
+        sysbus_connect_irq(sbd, n, irq);
+        n++;
+    }
 
     return dev;
 }
@@ -409,8 +409,8 @@ static void pl192_init(Object *obj)
     memory_region_init_io(&s->iomem, obj, &pl192_ops, s, "pl192", 0x1000);
     sysbus_init_mmio(sbd, &s->iomem);
     qdev_init_gpio_in(dev, pl192_irq_handler, PL192_INT_SOURCES);
-    sysbus_init_irq(sbd, &s->irq);
-    sysbus_init_irq(sbd, &s->fiq);
+    //sysbus_init_irq(sbd, s->irq);
+    //sysbus_init_irq(sbd, s->fiq);
 }
 
 static void pl192_class_init(ObjectClass *klass, void *data)

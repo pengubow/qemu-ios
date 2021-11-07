@@ -7,6 +7,7 @@
 #include "hw/arm/boot.h"
 #include "hw/intc/pl192.h"
 #include "hw/arm/ipod_touch_uart.h"
+#include "hw/arm/ipod_touch_spi.h"
 #include "cpu.h"
 
 #define TYPE_IPOD_TOUCH "iPod-Touch"
@@ -37,7 +38,15 @@
 #define TIMER_COUNT_BUFFER 0x8
 #define TIMER_COUNT_BUFFER2 0xC
 
+// VIC
+#define S5L8900_VIC_N	  2
+#define S5L8900_VIC_SIZE  32
+
 #define POWER_ID 0x44
+
+#define S5L8900_SPI0_IRQ 0x9
+#define S5L8900_SPI1_IRQ 0xA
+#define S5L8900_SPI2_IRQ 0xB
 
 typedef struct {
     MachineClass parent;

@@ -406,9 +406,9 @@ static void pl192_init(Object *obj)
     PL192State *s = PL192(obj);
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
 
-    memory_region_init_io(&s->iomem, obj, &pl192_ops, s, "pl192", 0x1000);
-    sysbus_init_mmio(sbd, &s->iomem);
-    qdev_init_gpio_in(dev, pl192_irq_handler, PL192_INT_SOURCES);
+    //memory_region_init_io(&s->iomem, obj, &pl192_ops, s, "pl192", 0x1000);
+    //sysbus_init_mmio(sbd, &s->iomem);
+    //qdev_init_gpio_in(dev, pl192_irq_handler, PL192_INT_SOURCES);
     //sysbus_init_irq(sbd, s->irq);
     //sysbus_init_irq(sbd, s->fiq);
 }

@@ -12,6 +12,7 @@
 #include "hw/arm/xnu_mem.h"
 #include "hw/arm/ipod_touch.h"
 #include "hw/arm/ipod_touch_uart.h"
+#include "hw/arm/ipod_touch_spi.h"
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
 #define IBOOT_BASE 0x18000000
@@ -23,7 +24,9 @@
 #define VIC0_MEM_BASE 0x38E00000
 #define VIC1_MEM_BASE 0x38E01000
 #define UNKNOWN1_MEM_BASE 0x38E02000
-#define UNKNOWN2_MEM_BASE 0x3D400000
+#define IIS0_MEM_BASE 0x3D400000
+#define IIS1_MEM_BASE 0x3CD00000
+#define IIS2_MEM_BASE 0x3CA00000
 #define UNKNOWN3_MEM_BASE 0x24000000
 #define TIMER1_MEM_BASE 0x3E200000
 #define TIMER2_MEM_BASE 0x3E210000
@@ -31,14 +34,13 @@
 #define USBPHYS_MEM_BASE 0x3C400000
 #define GPIO_MEM_BASE 0x3E400000
 #define I2C1_MEM_BASE 0x3C900000
-#define IIS_MEM_BASE 0x3CA00000
-#define SPI_MEM_BASE 0x3CD00000
-#define SDCI_MEM_BASE 0x3C300000
+#define SPI0_MEM_BASE 0x3C300000
+#define SPI1_MEM_BASE 0x3CE00000
+#define SPI2_MEM_BASE 0x3D200000
 #define WATCHDOG_MEM_BASE 0x3E300000
-#define ADC_MEM_BASE 0x3CE00000
-#define RTC_MEM_BASE 0x3D200000
 #define DISPLAY_MEM_BASE 0x38900000
 #define CHIPID_MEM_BASE 0x3e500000
+#define RAM_MEM_BASE 0x8000000
 
 #define UART0_MEM_BASE 0x3CC00000
 #define UART1_MEM_BASE 0x3CC04000
@@ -77,8 +79,8 @@ static void ipod_touch_cpu_reset(void *opaque)
     cpu_reset(cs);
 
     env->regs[0] = nms->kbootargs_pa;
-    cpu_set_pc(CPU(cpu), 0xc00607ec);
-    //cpu_set_pc(CPU(cpu), IBOOT_BASE);
+    //cpu_set_pc(CPU(cpu), 0xc00607ec);
+    cpu_set_pc(CPU(cpu), IBOOT_BASE);
     //cpu_set_pc(CPU(cpu), LLB_BASE);
 }
 
@@ -254,31 +256,6 @@ static const MemoryRegionOps sysic_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-static uint64_t printf_read(void *opaque, hwaddr addr, unsigned size)
-{
-    IPodTouchMachineState *nms = (IPodTouchMachineState *) opaque;
-    return nms->printf_buffer[addr];
-}
-
-static void printf_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
-{
-    IPodTouchMachineState *nms = (IPodTouchMachineState *) opaque;
-    nms->printf_buffer[addr] = val;
-
-    if(addr == 0) {
-        // print buffer
-        for(int i = 0; i < 256; i++) {
-            printf("%c", (char) nms->printf_buffer[i]);
-        }
-    }
-}
-
-static const MemoryRegionOps printf_ops = {
-    .read = printf_read,
-    .write = printf_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-};
-
 static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
@@ -365,7 +342,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x10000);
 
     // allocate UART ram
-    //allocate_ram(sysmem, "uart", 0xe0000000, 0x20000);
+    allocate_ram(sysmem, "ram", RAM_MEM_BASE, 0x8000000);
 
     uint32_t start = 0xf000000;
     allocate_ram(sysmem, "unknown??", start, 0x10000000 - start);
@@ -373,7 +350,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     // load iBoot
     uint8_t *file_data = NULL;
     unsigned long fsize;
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot.bin", (char **)&file_data, &fsize, NULL)) {
+    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot_patched.bin", (char **)&file_data, &fsize, NULL)) {
          allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
          address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
@@ -386,19 +363,14 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
      }
 
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
-    allocate_ram(sysmem, "unknown2", UNKNOWN2_MEM_BASE, 0x1000);
+    allocate_ram(sysmem, "unknown2", 0x38a00000, 0x1000);
     allocate_ram(sysmem, "unknown3", UNKNOWN3_MEM_BASE, 0x10000);
     allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "usbotg", USBOTG_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "usbphys", USBPHYS_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "i2c1", I2C1_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "iis", IIS_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "spi", SPI_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "sdci", SDCI_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "adc", ADC_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "rtc", RTC_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "display", DISPLAY_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "timer2", TIMER2_MEM_BASE, align_64k_high(0x1));
@@ -408,7 +380,12 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "uart3", UART3_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart4", UART4_MEM_BASE, align_64k_high(0x4000));
 
+    allocate_ram(sysmem, "iis0", IIS0_MEM_BASE, align_64k_high(0x1));
+    allocate_ram(sysmem, "iis1", IIS1_MEM_BASE, align_64k_high(0x1));
+    allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
+
     allocate_ram(sysmem, "iboot_framebuffer", 0xfe000000, align_64k_high(3 * 320 * 480));
+    allocate_ram(sysmem, "vrom", 0x20000000, 0x10000);
 
     // intercept printf writes
     // MemoryRegion *iomem = g_new(MemoryRegion, 1);
@@ -464,6 +441,11 @@ static void ipod_touch_instance_init(Object *obj)
     object_property_set_description(obj, "kern-cmd-args", "Set the XNU kernel cmd args");
 }
 
+static inline qemu_irq s5l8900_get_irq(IPodTouchMachineState *s, int n)
+{
+    return s->irq[n / S5L8900_VIC_SIZE][n % S5L8900_VIC_SIZE];
+}
+
 static void ipod_touch_machine_init(MachineState *machine)
 {
 	IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
@@ -510,6 +492,16 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, UART0_MEM_BASE, &nms->uart0->iomem);
     SysBusDevice *sbd = SYS_BUS_DEVICE(uart0);
     sysbus_realize_and_unref(sbd, &error_fatal);
+
+    // init spis
+    set_spi_base(0);
+    sysbus_create_simple("s5l8900spi", SPI0_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI0_IRQ));
+
+    set_spi_base(1);
+    sysbus_create_simple("s5l8900spi", SPI1_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI1_IRQ));
+
+    set_spi_base(2);
+    sysbus_create_simple("s5l8900spi", SPI2_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI2_IRQ));
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
 

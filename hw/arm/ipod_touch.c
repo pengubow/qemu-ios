@@ -9,6 +9,7 @@
 #include "sysemu/reset.h"
 #include "hw/arm/xnu.h"
 #include "hw/platform-bus.h"
+#include "hw/block/flash.h"
 #include "hw/arm/xnu_mem.h"
 #include "hw/arm/ipod_touch.h"
 #include "hw/arm/ipod_touch_uart.h"
@@ -27,7 +28,7 @@
 #define IIS0_MEM_BASE 0x3D400000
 #define IIS1_MEM_BASE 0x3CD00000
 #define IIS2_MEM_BASE 0x3CA00000
-#define UNKNOWN3_MEM_BASE 0x24000000
+#define NOR_MEM_BASE 0x24000000
 #define TIMER1_MEM_BASE 0x3E200000
 #define TIMER2_MEM_BASE 0x3E210000
 #define USBOTG_MEM_BASE 0x38400000
@@ -41,6 +42,8 @@
 #define DISPLAY_MEM_BASE 0x38900000
 #define CHIPID_MEM_BASE 0x3e500000
 #define RAM_MEM_BASE 0x8000000
+#define SHA1_MEM_BASE 0x38000000
+#define AES_MEM_BASE 0x38C00000
 
 #define UART0_MEM_BASE 0x3CC00000
 #define UART1_MEM_BASE 0x3CC04000
@@ -301,6 +304,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     uint32_t phys_pc;
     uint64_t dtb_size;
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
+    DriveInfo *dinfo;
 
     macho_file_highest_lowest_base(nms->kernel_filename, IPOD_TOUCH_PHYS_BASE, &virt_base, &kernel_low, &kernel_high);
 
@@ -350,7 +354,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     // load iBoot
     uint8_t *file_data = NULL;
     unsigned long fsize;
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot_patched.bin", (char **)&file_data, &fsize, NULL)) {
+    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot.bin", (char **)&file_data, &fsize, NULL)) {
          allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
          address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
@@ -364,7 +368,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "unknown2", 0x38a00000, 0x1000);
-    allocate_ram(sysmem, "unknown3", UNKNOWN3_MEM_BASE, 0x10000);
     allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "usbotg", USBOTG_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "usbphys", USBPHYS_MEM_BASE, align_64k_high(0x1));
@@ -391,6 +394,18 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     // MemoryRegion *iomem = g_new(MemoryRegion, 1);
     // memory_region_init_io(iomem, OBJECT(nms), &printf_ops, nms, "printf", 0x100);
     // memory_region_add_subregion(sysmem, 0x18022858, iomem);
+
+    // setup 1MB NOR
+    dinfo = drive_get(IF_PFLASH, 0, 0);
+    if (!dinfo) {
+        printf("A NOR image must be given with the -pflash parameter\n");
+        abort();
+    }
+
+    if(!pflash_cfi02_register(NOR_MEM_BASE, "nor", 1024 * 1024, dinfo ? blk_by_legacy_dinfo(dinfo) : NULL, 4096, 1, 2, 0x00bf, 0x273f, 0x0, 0x0, 0x555, 0x2aa, 0)) {
+        printf("Error registering NOR flash!\n");
+        abort();
+    }
 }
 
 static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)
@@ -504,6 +519,20 @@ static void ipod_touch_machine_init(MachineState *machine)
     sysbus_create_simple("s5l8900spi", SPI2_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI2_IRQ));
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
+
+    // init AES engine
+    S5L8900AESState *aes_state = malloc(sizeof(S5L8900AESState));
+    nms->aes_state = aes_state;
+    MemoryRegion *iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(s), &aes_ops, s, "aes", 0x100);
+    memory_region_add_subregion(sysmem, AES_MEM_BASE, iomem);
+
+    // init SHA1 engine
+    S5L8900SHA1State *sha1_state = malloc(sizeof(S5L8900SHA1State));
+    nms->sha1_state = sha1_state;
+    iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(s), &sha1_ops, s, "sha1", 0x100);
+    memory_region_add_subregion(sysmem, SHA1_MEM_BASE, iomem);
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
 }

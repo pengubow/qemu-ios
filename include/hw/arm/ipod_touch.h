@@ -23,6 +23,10 @@
 #define CLOCK1_CONFIG1 0x4
 #define CLOCK1_CONFIG2 0x8
 #define CLOCK1_PLLLOCK 0x40
+#define CLOCK1_PLL0CON 0x20
+#define CLOCK1_PLL1CON 0x24
+#define CLOCK1_PLL2CON 0x28
+#define CLOCK1_PLL3CON 0x2C
 #define CLOCK1_PLLMODE 0x44
 
 // timer stuff

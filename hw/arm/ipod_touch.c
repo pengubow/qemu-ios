@@ -30,7 +30,6 @@
 #define IIS2_MEM_BASE 0x3CA00000
 #define NOR_MEM_BASE 0x24000000
 #define TIMER1_MEM_BASE 0x3E200000
-#define TIMER2_MEM_BASE 0x3E210000
 #define USBOTG_MEM_BASE 0x38400000
 #define USBPHYS_MEM_BASE 0x3C400000
 #define GPIO_MEM_BASE 0x3E400000
@@ -44,6 +43,7 @@
 #define RAM_MEM_BASE 0x8000000
 #define SHA1_MEM_BASE 0x38000000
 #define AES_MEM_BASE 0x38C00000
+#define VROM_MEM_BASE 0x20000000
 
 #define UART0_MEM_BASE 0x3CC00000
 #define UART1_MEM_BASE 0x3CC04000
@@ -173,7 +173,7 @@ static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
         case TIMER_TICKSLOW:
             return s->ticks_low;
         case TIMER_IRQSTAT:
-            return s->irqstat;
+            return ~0; // s->irqstat;
         case TIMER_IRQLATCH:
             return 0xffffffff;
 
@@ -195,7 +195,23 @@ CLOCK
 
 static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
-    // Do nothing
+    s5l8900_clk1_s *s = (struct s5l8900_clk1_s *) opaque;
+
+    switch (addr) {
+        case CLOCK1_CONFIG0:
+            s->clk1_config0 = val;
+        case CLOCK1_CONFIG1:
+            s->clk1_config1 = val;
+        case CLOCK1_CONFIG2:
+            s->clk1_config2 = val;
+        case CLOCK1_PLLLOCK:
+            s->clk1_plllock = val;
+        case CLOCK1_PLLMODE:
+            s->clk1_pllmode = val;
+    
+      default:
+            break;
+    }
 }
 
 static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
@@ -209,8 +225,10 @@ static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
             return s->clk1_config1;
         case CLOCK1_CONFIG2:
             return s->clk1_config2;
+        case CLOCK1_PLL0CON:
+            return (1023 << 8) | (12 << 24); // TODO this gives a clock frequency that's slightly below the target value (412000000)!
         case CLOCK1_PLLLOCK:
-            return 1;
+            return s->clk1_plllock;
         case CLOCK1_PLLMODE:
             return s->clk1_pllmode;
     
@@ -283,7 +301,7 @@ static void ipod_touch_init_timer(MachineState *machine, MemoryRegion *sysmem)
     nms->timer1->st_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, s5l8900_st_tick, nms->timer1);
 
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(nms), &timer1_ops, nms->timer1, "timer1", 0x1000);
+    memory_region_init_io(iomem, OBJECT(nms), &timer1_ops, nms->timer1, "timer1", 0x10001);
     memory_region_add_subregion(sysmem, TIMER1_MEM_BASE, iomem);
 }
 
@@ -351,19 +369,26 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     uint32_t start = 0xf000000;
     allocate_ram(sysmem, "unknown??", start, 0x10000000 - start);
 
-    // load iBoot
+    // load the bootrom (vrom)
     uint8_t *file_data = NULL;
     unsigned long fsize;
+    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/bootrom_s5l8900", (char **)&file_data, &fsize, NULL)) {
+        allocate_ram(sysmem, "vrom", VROM_MEM_BASE, 0x10000);
+        address_space_rw(nsas, VROM_MEM_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+    }
+
+    // load iBoot
+    file_data = NULL;
     if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot.bin", (char **)&file_data, &fsize, NULL)) {
-         allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
-         address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+        allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
+        address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
 
      // load LLB
     file_data = NULL;
     if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/LLB.n45ap.RELEASE", (char **)&file_data, &fsize, NULL)) {
-         allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(fsize));
-         address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+        allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(fsize));
+        address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
 
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
@@ -376,8 +401,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "display", DISPLAY_MEM_BASE, align_64k_high(0x1));
 
-    allocate_ram(sysmem, "timer2", TIMER2_MEM_BASE, align_64k_high(0x1));
-
     allocate_ram(sysmem, "uart1", UART1_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart2", UART2_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart3", UART3_MEM_BASE, align_64k_high(0x4000));
@@ -388,7 +411,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "iboot_framebuffer", 0xfe000000, align_64k_high(3 * 320 * 480));
-    allocate_ram(sysmem, "vrom", 0x20000000, 0x10000);
 
     // intercept printf writes
     // MemoryRegion *iomem = g_new(MemoryRegion, 1);
@@ -406,6 +428,11 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
         printf("Error registering NOR flash!\n");
         abort();
     }
+
+    // TODO workaround for USB initialisation
+    uint32_t *data = malloc(4);
+    data[0] = 0x17d78400;
+    address_space_rw(nsas, 0xfd20000+484, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
 }
 
 static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)

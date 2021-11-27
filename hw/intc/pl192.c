@@ -144,7 +144,7 @@ static void pl192_update(PL192State *s)
 static inline void pl192_mask_priority(PL192State *s)
 {
     if (s->stack_i >= PL192_INT_SOURCES) {
-        hw_error("pl192: internal error\n");
+        hw_error("pl192: internal error (trying to mask when there are no more sources)\n");
     }
     s->stack_i++;
     if (s->current == PL192_DAISY_IRQ) {
@@ -161,7 +161,8 @@ static inline void pl192_mask_priority(PL192State *s)
 static inline void pl192_unmask_priority(PL192State *s)
 {
     if (s->stack_i < 1) {
-        hw_error("pl192: internal error\n");
+        return; // simply ignore this event
+        //hw_error("pl192: internal error (mask stack insufficient)\n");
     }
     s->stack_i--;
     s->priority = s->priority_stack[s->stack_i];

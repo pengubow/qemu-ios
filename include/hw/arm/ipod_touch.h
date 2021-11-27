@@ -10,6 +10,7 @@
 #include "hw/arm/ipod_touch_spi.h"
 #include "hw/arm/ipod_touch_aes.h"
 #include "hw/arm/ipod_touch_sha1.h"
+#include "hw/arm/ipod_touch_usb_otg.h"
 #include "cpu.h"
 
 #define TYPE_IPOD_TOUCH "iPod-Touch"
@@ -98,6 +99,7 @@ typedef struct {
 	PL192State *vic0;
 	PL192State *vic1;
 	S5L8900UartState *uart0;
+	synopsys_usb_state *usb_otg;
 	s5l8900_clk1_s *clock1;
 	s5l8900_timer_s *timer1;
 	S5L8900AESState *aes_state;

@@ -14,6 +14,7 @@
 #include "hw/arm/ipod_touch.h"
 #include "hw/arm/ipod_touch_uart.h"
 #include "hw/arm/ipod_touch_spi.h"
+#include "hw/arm/exynos4210.h"
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
 #define IBOOT_BASE 0x18000000
@@ -44,12 +45,15 @@
 #define SHA1_MEM_BASE 0x38000000
 #define AES_MEM_BASE 0x38C00000
 #define VROM_MEM_BASE 0x20000000
-
+#define NAND_MEM_BASE 0x38A00000
+#define DMAC0_MEM_BASE 0x38200000
+#define DMAC1_MEM_BASE 0x39900000
 #define UART0_MEM_BASE 0x3CC00000
 #define UART1_MEM_BASE 0x3CC04000
 #define UART2_MEM_BASE 0x3CC08000
 #define UART3_MEM_BASE 0x3CC0C000
 #define UART4_MEM_BASE 0x3CC10000
+#define KERNELCACHE_BASE 0x9000000
 
 static void ipod_touch_cpu_setup(MachineState *machine, MemoryRegion **sysmem, ARMCPU **cpu, AddressSpace **nsas)
 {
@@ -85,6 +89,7 @@ static void ipod_touch_cpu_reset(void *opaque)
     //cpu_set_pc(CPU(cpu), 0xc00607ec);
     cpu_set_pc(CPU(cpu), IBOOT_BASE);
     //cpu_set_pc(CPU(cpu), LLB_BASE);
+    //cpu_set_pc(CPU(cpu), VROM_MEM_BASE);
 }
 
 static void s5l8900_st_update(s5l8900_timer_s *s)
@@ -277,10 +282,52 @@ static const MemoryRegionOps sysic_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
+/*
+NAND
+*/
+int nand_cmd_status = 0;
+
+static uint64_t s5l8900_nand_read(void *opaque, hwaddr addr, unsigned size)
+{
+    switch (addr) {
+        case 0x80:
+            if(nand_cmd_status == 0x90) {
+                //return 0x2555D5EC;
+                return 0;
+            }
+            else if(nand_cmd_status == 0x70) {
+                return (1 << 6);
+            }
+
+        case 0x48:
+            return (1 << 1) | (1 << 2) | (1 << 3); // set bit 2 and 4 to indicate that the FTM is ready
+        default:
+            break;
+    }
+    return 0;
+}
+
+static void s5l8900_nand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    switch(addr) {
+        case 0x8:
+            nand_cmd_status = val;
+        default:
+            break; 
+    }
+}
+
+static const MemoryRegionOps nand_ops = {
+    .read = s5l8900_nand_read,
+    .write = s5l8900_nand_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
 static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
     nms->clock1 = (s5l8900_clk1_s *) g_malloc0(sizeof(struct s5l8900_clk1_s));
+    nms->clock1->clk1_plllock = 1;
 
     // TODO same as clock1 for now
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
@@ -324,42 +371,42 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
     DriveInfo *dinfo;
 
-    macho_file_highest_lowest_base(nms->kernel_filename, IPOD_TOUCH_PHYS_BASE, &virt_base, &kernel_low, &kernel_high);
+    // macho_file_highest_lowest_base(nms->kernel_filename, IPOD_TOUCH_PHYS_BASE, &virt_base, &kernel_low, &kernel_high);
 
-    g_virt_base = virt_base;
-    g_phys_base = IPOD_TOUCH_PHYS_BASE;
-    phys_ptr = IPOD_TOUCH_PHYS_BASE;
+    // g_virt_base = virt_base;
+    // g_phys_base = IPOD_TOUCH_PHYS_BASE;
+    // phys_ptr = IPOD_TOUCH_PHYS_BASE;
 
-    printf("Virt base: %08x, kernel lowest: %08x, kernel highest: %08x\n", virt_base, kernel_low, kernel_high);
+    // printf("Virt base: %08x, kernel lowest: %08x, kernel highest: %08x\n", virt_base, kernel_low, kernel_high);
 
-    //now account for the loaded kernel
-    arm_load_macho(nms->kernel_filename, nsas, sysmem, "kernel.n45", IPOD_TOUCH_PHYS_BASE, virt_base, kernel_low, kernel_high, &phys_pc);
-    nms->kpc_pa = phys_pc; // TODO unused for now
+    // //now account for the loaded kernel
+    // arm_load_macho(nms->kernel_filename, nsas, sysmem, "kernel.n45", IPOD_TOUCH_PHYS_BASE, virt_base, kernel_low, kernel_high, &phys_pc);
+    // nms->kpc_pa = phys_pc; // TODO unused for now
 
-    phys_ptr = align_64k_high(kernel_high);
-    uint32_t kbootargs_pa = phys_ptr;
-    nms->kbootargs_pa = kbootargs_pa;
-    phys_ptr += align_64k_high(sizeof(struct xnu_arm_boot_args));
-    printf("Loading bootargs at memory location %08x\n", nms->kbootargs_pa);
+    // phys_ptr = align_64k_high(kernel_high);
+    // uint32_t kbootargs_pa = phys_ptr;
+    // nms->kbootargs_pa = kbootargs_pa;
+    // phys_ptr += align_64k_high(sizeof(struct xnu_arm_boot_args));
+    // printf("Loading bootargs at memory location %08x\n", nms->kbootargs_pa);
 
-    // allocate free space for kernel management (e.g., VM tables)
-    uint32_t top_of_kernel_data_pa = phys_ptr;
-    printf("Top of kernel data: %08x\n", top_of_kernel_data_pa);
-    allocate_ram(sysmem, "n45.extra", phys_ptr, 0x300000);
-    phys_ptr += align_64k_high(0x300000);
-    uint32_t mem_size = 0x8000000; // TODO hard-coded
+    // // allocate free space for kernel management (e.g., VM tables)
+    // uint32_t top_of_kernel_data_pa = phys_ptr;
+    // printf("Top of kernel data: %08x\n", top_of_kernel_data_pa);
+    // allocate_ram(sysmem, "n45.extra", phys_ptr, 0x300000);
+    // phys_ptr += align_64k_high(0x300000);
+    // uint32_t mem_size = 0x8000000; // TODO hard-coded
 
-    // load the device tree
-    macho_load_dtb(nms->dtb_filename, nsas, sysmem, "devicetree.45", phys_ptr, &dtb_size, &nms->uart_mmio_pa);
-    uint32_t dtb_va = phys_ptr;
+    // // load the device tree
+    // macho_load_dtb(nms->dtb_filename, nsas, sysmem, "devicetree.45", phys_ptr, &dtb_size, &nms->uart_mmio_pa);
+    // uint32_t dtb_va = phys_ptr;
 
-    phys_ptr += align_64k_high(dtb_size);
+    // phys_ptr += align_64k_high(dtb_size);
 
     // allocate framebuffer memory
     allocate_ram(sysmem, "framebuffer", phys_ptr, align_64k_high(3 * 320 * 480));
 
     // load boot args
-    macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa, dtb_va, dtb_size, nms->kern_args, phys_ptr);
+    // macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa, dtb_va, dtb_size, nms->kern_args, phys_ptr);
 
     allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x10000);
 
@@ -384,17 +431,22 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
         address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
 
-     // load LLB
-    file_data = NULL;
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/LLB.n45ap.RELEASE", (char **)&file_data, &fsize, NULL)) {
-        allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(fsize));
-        address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+    // // load LLB
+    // file_data = NULL;
+    // if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/LLB.n45ap.RELEASE", (char **)&file_data, &fsize, NULL)) {
+    //     allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(fsize));
+    //     address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+    //  }
+
+     // load the kernelcache at 0x09000000
+     file_data = NULL;
+    if (g_file_get_contents(nms->kernel_filename, (char **)&file_data, &fsize, NULL)) {
+        allocate_ram(sysmem, "kernel", KERNELCACHE_BASE, align_64k_high(fsize));
+        address_space_rw(nsas, KERNELCACHE_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
 
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
-    allocate_ram(sysmem, "unknown2", 0x38a00000, 0x1000);
     allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "usbotg", USBOTG_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "usbphys", USBPHYS_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "i2c1", I2C1_MEM_BASE, align_64k_high(0x1));
@@ -428,11 +480,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
         printf("Error registering NOR flash!\n");
         abort();
     }
-
-    // TODO workaround for USB initialisation
-    uint32_t *data = malloc(4);
-    data[0] = 0x17d78400;
-    address_space_rw(nsas, 0xfd20000+484, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
 }
 
 static void ipod_touch_set_kernel_filename(Object *obj, const char *value, Error **errp)
@@ -488,6 +535,13 @@ static inline qemu_irq s5l8900_get_irq(IPodTouchMachineState *s, int n)
     return s->irq[n / S5L8900_VIC_SIZE][n % S5L8900_VIC_SIZE];
 }
 
+static uint32_t s5l8900_usb_hwcfg[] = {
+    0,
+    0x7a8f60d0,
+    0x082000e8,
+    0x01f08024
+};
+
 static void ipod_touch_machine_init(MachineState *machine)
 {
 	IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
@@ -528,12 +582,18 @@ static void ipod_touch_machine_init(MachineState *machine)
     ipod_touch_init_sysic(machine, sysmem);
 
     // init uart
-    dev = ipod_touch_init_uart(0, 256, nms->irq[0][24], serial_hd(0));
-    S5L8900UartState *uart0 = S5L8900UART(dev);
-    nms->uart0 = uart0;
-    memory_region_add_subregion(sysmem, UART0_MEM_BASE, &nms->uart0->iomem);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(uart0);
-    sysbus_realize_and_unref(sbd, &error_fatal);
+    // dev = ipod_touch_init_uart(0, 256, nms->irq[0][24], serial_hd(0));
+    // S5L8900UartState *uart0 = S5L8900UART(dev);
+    // nms->uart0 = uart0;
+    // memory_region_add_subregion(sysmem, UART0_MEM_BASE, &nms->uart0->iomem);
+    // SysBusDevice *sbd = SYS_BUS_DEVICE(uart0);
+    // sysbus_realize_and_unref(sbd, &error_fatal);
+
+    dev = exynos4210_uart_create(UART0_MEM_BASE, 256, 0, serial_hd(0), nms->irq[0][24]);
+    if (!dev) {
+        printf("Failed to create uart0 device!\n");
+        abort();
+    }
 
     // init spis
     set_spi_base(0);
@@ -562,6 +622,20 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, SHA1_MEM_BASE, iomem);
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
+
+    // init NAND flash
+    iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(s), &nand_ops, s, "nand", 0x1000);
+    memory_region_add_subregion(sysmem, NAND_MEM_BASE, iomem);
+
+    // init USB OTG
+    dev = ipod_touch_init_usb_otg(nms->irq[0][13], s5l8900_usb_hwcfg);
+    synopsys_usb_state *usb_otg = S5L8900USBOTG(dev);
+    nms->usb_otg = usb_otg;
+    memory_region_add_subregion(sysmem, USBOTG_MEM_BASE, &nms->usb_otg->iomem);
+
+    //register_synopsys_usb(S5L8900_USB_OTG_BASE, s5l8900_get_irq(s, S5L8900_IRQ_OTG), s5l8900_usb_hwcfg);
+    //s5l8900_usb_phy_init(s);
 }
 
 static void ipod_touch_machine_class_init(ObjectClass *klass, void *data)

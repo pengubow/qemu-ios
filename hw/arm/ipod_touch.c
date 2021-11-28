@@ -12,7 +12,6 @@
 #include "hw/block/flash.h"
 #include "hw/arm/xnu_mem.h"
 #include "hw/arm/ipod_touch.h"
-#include "hw/arm/ipod_touch_uart.h"
 #include "hw/arm/ipod_touch_spi.h"
 #include "hw/arm/exynos4210.h"
 
@@ -53,6 +52,7 @@
 #define UART2_MEM_BASE 0x3CC08000
 #define UART3_MEM_BASE 0x3CC0C000
 #define UART4_MEM_BASE 0x3CC10000
+#define ENGINE_8900_MEM_BASE 0x3F000000
 #define KERNELCACHE_BASE 0x9000000
 
 static void ipod_touch_cpu_setup(MachineState *machine, MemoryRegion **sysmem, ARMCPU **cpu, AddressSpace **nsas)
@@ -85,10 +85,11 @@ static void ipod_touch_cpu_reset(void *opaque)
 
     cpu_reset(cs);
 
-    env->regs[0] = nms->kbootargs_pa;
+    //env->regs[0] = nms->kbootargs_pa;
     //cpu_set_pc(CPU(cpu), 0xc00607ec);
     cpu_set_pc(CPU(cpu), IBOOT_BASE);
-    //cpu_set_pc(CPU(cpu), LLB_BASE);
+    //env->regs[0] = 0x9000000;
+    //cpu_set_pc(CPU(cpu), LLB_BASE + 0x100);
     //cpu_set_pc(CPU(cpu), VROM_MEM_BASE);
 }
 
@@ -424,6 +425,13 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
         address_space_rw(nsas, VROM_MEM_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     }
 
+    // patch the address table to point to our own routines
+    uint32_t *data = malloc(4);
+    data[0] = LLB_BASE + 0x80;
+    address_space_rw(nsas, 0x2000008c, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+    data[0] = LLB_BASE + 0x100;
+    address_space_rw(nsas, 0x20000090, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+
     // load iBoot
     file_data = NULL;
     if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot.bin", (char **)&file_data, &fsize, NULL)) {
@@ -438,12 +446,12 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     //     address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     //  }
 
-     // load the kernelcache at 0x09000000
-     file_data = NULL;
+    // load the kernelcache at 0x09000000
+    file_data = NULL;
     if (g_file_get_contents(nms->kernel_filename, (char **)&file_data, &fsize, NULL)) {
         allocate_ram(sysmem, "kernel", KERNELCACHE_BASE, align_64k_high(fsize));
         address_space_rw(nsas, KERNELCACHE_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
-     }
+    }
 
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x1));
@@ -463,11 +471,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "iboot_framebuffer", 0xfe000000, align_64k_high(3 * 320 * 480));
-
-    // intercept printf writes
-    // MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    // memory_region_init_io(iomem, OBJECT(nms), &printf_ops, nms, "printf", 0x100);
-    // memory_region_add_subregion(sysmem, 0x18022858, iomem);
 
     // setup 1MB NOR
     dinfo = drive_get(IF_PFLASH, 0, 0);
@@ -581,14 +584,6 @@ static void ipod_touch_machine_init(MachineState *machine)
     // init sysic
     ipod_touch_init_sysic(machine, sysmem);
 
-    // init uart
-    // dev = ipod_touch_init_uart(0, 256, nms->irq[0][24], serial_hd(0));
-    // S5L8900UartState *uart0 = S5L8900UART(dev);
-    // nms->uart0 = uart0;
-    // memory_region_add_subregion(sysmem, UART0_MEM_BASE, &nms->uart0->iomem);
-    // SysBusDevice *sbd = SYS_BUS_DEVICE(uart0);
-    // sysbus_realize_and_unref(sbd, &error_fatal);
-
     dev = exynos4210_uart_create(UART0_MEM_BASE, 256, 0, serial_hd(0), nms->irq[0][24]);
     if (!dev) {
         printf("Failed to create uart0 device!\n");
@@ -621,7 +616,10 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_init_io(iomem, OBJECT(s), &sha1_ops, s, "sha1", 0x100);
     memory_region_add_subregion(sysmem, SHA1_MEM_BASE, iomem);
 
-    qemu_register_reset(ipod_touch_cpu_reset, nms);
+    // init 8900 engine
+    iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(s), &engine_8900_ops, nsas, "8900engine", 0x100);
+    memory_region_add_subregion(sysmem, ENGINE_8900_MEM_BASE, iomem);
 
     // init NAND flash
     iomem = g_new(MemoryRegion, 1);
@@ -636,6 +634,29 @@ static void ipod_touch_machine_init(MachineState *machine)
 
     //register_synopsys_usb(S5L8900_USB_OTG_BASE, s5l8900_get_irq(s, S5L8900_IRQ_OTG), s5l8900_usb_hwcfg);
     //s5l8900_usb_phy_init(s);
+
+    // init 8900 OPS
+    allocate_ram(sysmem, "8900ops", LLB_BASE, 0x1000);
+
+    // patch the instructions related to 8900 decryption
+    uint32_t *data = malloc(8);
+    data[0] = 0xe3b00001; // MOVS R0, #1
+    data[1] = 0xe12fff1e; // BX LR
+    address_space_rw(nsas, LLB_BASE + 0x80, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 8, 1);
+
+    // load the decryption logic in memory
+    unsigned long fsize;
+    uint8_t *file_data = NULL;
+    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/asm/8900.bin", (char **)&file_data, &fsize, NULL)) {
+        address_space_rw(nsas, LLB_BASE + 0x100, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+    }
+
+    // contains some constants
+    data = malloc(4);
+    data[0] = ENGINE_8900_MEM_BASE; // engine base address
+    address_space_rw(nsas, LLB_BASE + 0x208, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+
+    qemu_register_reset(ipod_touch_cpu_reset, nms);
 }
 
 static void ipod_touch_machine_class_init(ObjectClass *klass, void *data)

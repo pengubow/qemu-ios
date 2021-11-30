@@ -14,6 +14,7 @@
 #include "hw/arm/ipod_touch.h"
 #include "hw/arm/ipod_touch_spi.h"
 #include "hw/arm/exynos4210.h"
+#include "hw/dma/pl080.h"
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
 #define IBOOT_BASE 0x18000000
@@ -655,6 +656,21 @@ static void ipod_touch_machine_init(MachineState *machine)
     data = malloc(4);
     data[0] = ENGINE_8900_MEM_BASE; // engine base address
     address_space_rw(nsas, LLB_BASE + 0x208, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+
+    // init two pl080 devices
+    // TODO wire interrupts!
+    dev = qdev_new("pl080");
+    PL080State *pl080_1 = PL080(dev);
+    object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
+    memory_region_add_subregion(sysmem, DMAC0_MEM_BASE, &pl080_1->iomem);
+    SysBusDevice *busdev = SYS_BUS_DEVICE(dev);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_DMAC0_IRQ));
+
+    dev = qdev_new("pl080");
+    PL080State *pl080_2 = PL080(dev);
+    object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
+    memory_region_add_subregion(sysmem, DMAC1_MEM_BASE, &pl080_2->iomem);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_DMAC1_IRQ));
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
 }

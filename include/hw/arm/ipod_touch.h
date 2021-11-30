@@ -55,6 +55,9 @@
 #define S5L8900_SPI1_IRQ 0xA
 #define S5L8900_SPI2_IRQ 0xB
 
+#define S5L8900_DMAC0_IRQ 0x10
+#define S5L8900_DMAC1_IRQ 0x11 
+
 typedef struct {
     MachineClass parent;
 } IPodTouchMachineClass;

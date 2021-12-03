@@ -49,7 +49,12 @@
 #define S5L8900_VIC_N	  2
 #define S5L8900_VIC_SIZE  32
 
+// SYSIC
 #define POWER_ID 0x44
+#define POWER_ONCTRL 0xC
+#define POWER_OFFCTRL 0x10
+#define POWER_SETSTATE 0x8
+#define POWER_STATE 0x14
 
 #define S5L8900_SPI0_IRQ 0x9
 #define S5L8900_SPI1_IRQ 0xA
@@ -75,6 +80,15 @@ typedef struct s5l8900_clk1_s
 
 } s5l8900_clk1_s;
 
+typedef struct s5l8900_usb_phys_s
+{
+	uint32_t usb_ophypwr;
+	uint32_t usb_ophyclk;
+	uint32_t usb_orstcon;
+	uint32_t usb_ophytune;
+
+} s5l8900_usb_phys_s;
+
 typedef struct s5l8900_timer_s
 {
     uint32_t    ticks_high;
@@ -96,6 +110,12 @@ typedef struct s5l8900_timer_s
 
 } s5l8900_timer_s;
 
+typedef struct s5l8900_sysic_s
+{
+	uint32_t power_state;
+
+} s5l8900_sysic_s;
+
 typedef struct {
 	MachineState parent;
 	qemu_irq **irq;
@@ -104,6 +124,8 @@ typedef struct {
 	synopsys_usb_state *usb_otg;
 	s5l8900_clk1_s *clock1;
 	s5l8900_timer_s *timer1;
+	s5l8900_sysic_s *sysic;
+	s5l8900_usb_phys_s *usb_phys;
 	S5L8900AESState *aes_state;
 	S5L8900SHA1State *sha1_state;
 	uint32_t kpc_pa;

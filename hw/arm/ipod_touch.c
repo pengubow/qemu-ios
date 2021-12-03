@@ -34,6 +34,7 @@
 #define USBOTG_MEM_BASE 0x38400000
 #define USBPHYS_MEM_BASE 0x3C400000
 #define GPIO_MEM_BASE 0x3E400000
+#define I2C0_MEM_BASE 0x3C600000
 #define I2C1_MEM_BASE 0x3C900000
 #define SPI0_MEM_BASE 0x3C300000
 #define SPI1_MEM_BASE 0x3CE00000
@@ -215,7 +216,6 @@ static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsign
             s->clk1_plllock = val;
         case CLOCK1_PLLMODE:
             s->clk1_pllmode = val;
-    
       default:
             break;
     }
@@ -257,6 +257,8 @@ SYSIC
 
 static uint64_t s5l8900_sysic_read(void *opaque, hwaddr addr, unsigned size)
 {
+    s5l8900_sysic_s *s = (s5l8900_sysic_s *) opaque;
+
     switch (addr) {
         case POWER_ID:
             //return (3 << 24); //for older iboots
@@ -264,9 +266,9 @@ static uint64_t s5l8900_sysic_read(void *opaque, hwaddr addr, unsigned size)
         case 0x7a:
         case 0x7c:
             return 1;
-        case 0x14:
-        case 0x8:
-            return 0x12fc;
+        case POWER_SETSTATE:
+        case POWER_STATE:
+            return s->power_state;
       default:
         break;
     }
@@ -275,7 +277,22 @@ static uint64_t s5l8900_sysic_read(void *opaque, hwaddr addr, unsigned size)
 
 static void s5l8900_sysic_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
-    // Do nothing
+    s5l8900_sysic_s *s = (s5l8900_sysic_s *) opaque;
+
+    fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    switch (addr) {
+        case POWER_ONCTRL:
+            if(val == 0x10) { break; } // ugly workaround
+            s->power_state = val;
+            break;
+        case POWER_OFFCTRL:
+            s->power_state = val;
+            break;
+        default:
+            break;
+    }
+
+    fprintf(stderr, "POWER STATE is now: 0x%08x\n", s->power_state);
 }
 
 static const MemoryRegionOps sysic_ops = {
@@ -325,6 +342,69 @@ static const MemoryRegionOps nand_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
+/*
+USB PHYS
+*/
+static uint64_t s5l8900_usb_phys_read(void *opaque, hwaddr addr, unsigned size)
+{
+    s5l8900_usb_phys_s *s = opaque;
+
+    switch(addr)
+    {
+    case 0x0: // OPHYPWR
+        return s->usb_ophypwr;
+
+    case 0x4: // OPHYCLK
+        return s->usb_ophyclk;
+
+    case 0x8: // ORSTCON
+        return s->usb_orstcon;
+
+    case 0x20: // OPHYTUNE
+        return s->usb_ophytune;
+
+    default:
+        fprintf(stderr, "%s: read invalid location 0x%08x\n", __func__, addr);
+        return 0;
+    }
+
+    return 0;
+}
+
+static void s5l8900_usb_phys_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    s5l8900_usb_phys_s *s = opaque;
+
+    switch(addr)
+    {
+    case 0x0: // OPHYPWR
+        s->usb_ophypwr = val;
+        return;
+
+    case 0x4: // OPHYCLK
+        s->usb_ophyclk = val;
+        return;
+
+    case 0x8: // ORSTCON
+        s->usb_orstcon = val;
+        return;
+
+    case 0x20: // OPHYTUNE
+        s->usb_ophytune = val;
+        return;
+
+    default:
+        //hw_error("%s: write invalid location 0x%08x.\n", __func__, offset);
+        fprintf(stderr, "%s: write invalid location 0x%08x\n", __func__, addr);
+    }
+}
+
+static const MemoryRegionOps usb_phys_ops = {
+    .read = s5l8900_usb_phys_read,
+    .write = s5l8900_usb_phys_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
 static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
@@ -357,8 +437,9 @@ static void ipod_touch_init_timer(MachineState *machine, MemoryRegion *sysmem)
 static void ipod_touch_init_sysic(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
+    nms->sysic = (s5l8900_sysic_s *) g_malloc0(sizeof(struct s5l8900_sysic_s));
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(nms), &sysic_ops, NULL, "sysic", 0x1000);
+    memory_region_init_io(iomem, OBJECT(nms), &sysic_ops, nms->sysic, "sysic", 0x1000);
     memory_region_add_subregion(sysmem, SYSIC_MEM_BASE, iomem);
 }
 
@@ -404,10 +485,10 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     // phys_ptr += align_64k_high(dtb_size);
 
-    // allocate framebuffer memory
+    // // allocate framebuffer memory
     allocate_ram(sysmem, "framebuffer", phys_ptr, align_64k_high(3 * 320 * 480));
 
-    // load boot args
+    // // load boot args
     // macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa, dtb_va, dtb_size, nms->kern_args, phys_ptr);
 
     allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x10000);
@@ -456,8 +537,8 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "usbphys", USBPHYS_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
+    allocate_ram(sysmem, "i2c0", I2C0_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "i2c1", I2C1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "display", DISPLAY_MEM_BASE, align_64k_high(0x1));
@@ -633,8 +714,17 @@ static void ipod_touch_machine_init(MachineState *machine)
     nms->usb_otg = usb_otg;
     memory_region_add_subregion(sysmem, USBOTG_MEM_BASE, &nms->usb_otg->iomem);
 
-    //register_synopsys_usb(S5L8900_USB_OTG_BASE, s5l8900_get_irq(s, S5L8900_IRQ_OTG), s5l8900_usb_hwcfg);
-    //s5l8900_usb_phy_init(s);
+    // init USB PHYS
+    s5l8900_usb_phys_s *usb_state = malloc(sizeof(s5l8900_usb_phys_s));
+    nms->usb_phys = usb_state;
+    usb_state->usb_ophypwr = 0;
+    usb_state->usb_ophyclk = 0;
+    usb_state->usb_orstcon = 0;
+    usb_state->usb_ophytune = 0;
+
+    iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(s), &usb_phys_ops, usb_state, "usbphys", 0x40);
+    memory_region_add_subregion(sysmem, USBPHYS_MEM_BASE, iomem);
 
     // init 8900 OPS
     allocate_ram(sysmem, "8900ops", LLB_BASE, 0x1000);
@@ -657,8 +747,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     data[0] = ENGINE_8900_MEM_BASE; // engine base address
     address_space_rw(nsas, LLB_BASE + 0x208, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
 
-    // init two pl080 devices
-    // TODO wire interrupts!
+    // init two pl080 DMAC0 devices
     dev = qdev_new("pl080");
     PL080State *pl080_1 = PL080(dev);
     object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);

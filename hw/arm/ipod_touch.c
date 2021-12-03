@@ -54,6 +54,8 @@
 #define UART2_MEM_BASE 0x3CC08000
 #define UART3_MEM_BASE 0x3CC0C000
 #define UART4_MEM_BASE 0x3CC10000
+#define ADM_MEM_BASE 0x38800000  // TODO unused!
+#define MBX_MEM_BASE 0x3B000000
 #define ENGINE_8900_MEM_BASE 0x3F000000
 #define KERNELCACHE_BASE 0x9000000
 
@@ -279,10 +281,10 @@ static void s5l8900_sysic_write(void *opaque, hwaddr addr, uint64_t val, unsigne
 {
     s5l8900_sysic_s *s = (s5l8900_sysic_s *) opaque;
 
-    fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
     switch (addr) {
         case POWER_ONCTRL:
-            if(val == 0x10) { break; } // ugly workaround
+            if(val == 0x20 || val == 0x4) { break; } // ugly workaround
             s->power_state = val;
             break;
         case POWER_OFFCTRL:
@@ -291,8 +293,6 @@ static void s5l8900_sysic_write(void *opaque, hwaddr addr, uint64_t val, unsigne
         default:
             break;
     }
-
-    fprintf(stderr, "POWER STATE is now: 0x%08x\n", s->power_state);
 }
 
 static const MemoryRegionOps sysic_ops = {
@@ -402,6 +402,35 @@ static void s5l8900_usb_phys_write(void *opaque, hwaddr addr, uint64_t val, unsi
 static const MemoryRegionOps usb_phys_ops = {
     .read = s5l8900_usb_phys_read,
     .write = s5l8900_usb_phys_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+/*
+MBX
+*/
+static uint64_t s5l8900_mbx_read(void *opaque, hwaddr addr, unsigned size)
+{
+    //fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+    switch(addr)
+    {
+        case 0x12c:
+            return 0x100;
+        case 0x1020:
+            return 0x10000;
+        default:
+            break;
+    }
+    return 0;
+}
+
+static void s5l8900_mbx_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    // do nothing
+}
+
+static const MemoryRegionOps mbx_ops = {
+    .read = s5l8900_mbx_read,
+    .write = s5l8900_mbx_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
@@ -760,6 +789,10 @@ static void ipod_touch_machine_init(MachineState *machine)
     object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
     memory_region_add_subregion(sysmem, DMAC1_MEM_BASE, &pl080_2->iomem);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_DMAC1_IRQ));
+
+    iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(nms), &mbx_ops, NULL, "mbx", 0x1000000);
+    memory_region_add_subregion(sysmem, MBX_MEM_BASE, iomem);
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
 }

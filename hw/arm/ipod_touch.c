@@ -210,14 +210,19 @@ static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsign
     switch (addr) {
         case CLOCK1_CONFIG0:
             s->clk1_config0 = val;
+            break;
         case CLOCK1_CONFIG1:
             s->clk1_config1 = val;
+            break;
         case CLOCK1_CONFIG2:
             s->clk1_config2 = val;
+            break;
         case CLOCK1_PLLLOCK:
             s->clk1_plllock = val;
+            break;
         case CLOCK1_PLLMODE:
             s->clk1_pllmode = val;
+            break;
       default:
             break;
     }

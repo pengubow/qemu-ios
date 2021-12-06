@@ -10,6 +10,7 @@
 #include "hw/arm/xnu.h"
 #include "hw/platform-bus.h"
 #include "hw/block/flash.h"
+#include "hw/qdev-clock.h"
 #include "hw/arm/xnu_mem.h"
 #include "hw/arm/ipod_touch.h"
 #include "hw/arm/ipod_touch_spi.h"
@@ -172,11 +173,14 @@ static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t value, unsi
 static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
 {
     s5l8900_timer_s *s = (struct s5l8900_timer_s *) opaque;
-    uint64_t ticks;
+    uint64_t elapsed_ns, ticks;
 
     switch (addr) {
         case TIMER_TICKSHIGH:    // needs to be fixed so that read from low first works as well
-            ticks = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+
+            elapsed_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+            ticks = clock_ns_to_ticks(s->sysclk, elapsed_ns);
+            //printf("TICKS: %lld\n", ticks);
             s->ticks_high = (ticks >> 32);
             s->ticks_low = (ticks & 0xFFFFFFFF);
             return s->ticks_high;
@@ -208,20 +212,8 @@ static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsign
     s5l8900_clk1_s *s = (struct s5l8900_clk1_s *) opaque;
 
     switch (addr) {
-        case CLOCK1_CONFIG0:
-            s->clk1_config0 = val;
-            break;
-        case CLOCK1_CONFIG1:
-            s->clk1_config1 = val;
-            break;
-        case CLOCK1_CONFIG2:
-            s->clk1_config2 = val;
-            break;
         case CLOCK1_PLLLOCK:
             s->clk1_plllock = val;
-            break;
-        case CLOCK1_PLLMODE:
-            s->clk1_pllmode = val;
             break;
       default:
             break;
@@ -240,12 +232,11 @@ static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
         case CLOCK1_CONFIG2:
             return s->clk1_config2;
         case CLOCK1_PLL0CON:
-            return (1023 << 8) | (12 << 24); // TODO this gives a clock frequency that's slightly below the target value (412000000)!
+            return (103 << 8) | (6 << 24); // this gives a clock frequency of 412MHz (12MHz * 2) * (103 / 6)
         case CLOCK1_PLLLOCK:
             return s->clk1_plllock;
         case CLOCK1_PLLMODE:
-            return s->clk1_pllmode;
-    
+            return 0x1f; // toggle the last 4 bits - indicating that PLL is enabled for all modes, set 1 bit to enable divisor mode for CLOCK PPL
       default:
             break;
     }
@@ -445,6 +436,17 @@ static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
     nms->clock1 = (s5l8900_clk1_s *) g_malloc0(sizeof(struct s5l8900_clk1_s));
     nms->clock1->clk1_plllock = 1;
 
+    uint64_t config0 = 0x0;
+    config0 |= (1 << 24); // indicate that we have a memory divisor
+    config0 |= (2 << 16); // set the memory divisor to two
+    nms->clock1->clk1_config0 = config0;
+
+    uint64_t config1 = 0x0;
+    config1 |= (1 << 24); // indicate that we have a bus divisor
+    config1 |= (3 << 16); // set the memory divisor to three
+    config1 |= (1 << 20); // set the peripheral factor to 1
+    nms->clock1->clk1_config1 = config1;
+
     // TODO same as clock1 for now
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
     memory_region_init_io(iomem, OBJECT(nms), &clock1_ops, nms->clock1, "clock0", 0x1000);
@@ -459,6 +461,7 @@ static void ipod_touch_init_timer(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
     nms->timer1 = (s5l8900_timer_s *) g_malloc0(sizeof(struct s5l8900_timer_s));
+    nms->timer1->sysclk = nms->sysclk;
     nms->timer1->irq = nms->irq[0][7];
     nms->timer1->base_time = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
     nms->timer1->st_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, s5l8900_st_tick, nms->timer1);
@@ -669,6 +672,10 @@ static void ipod_touch_machine_init(MachineState *machine)
     ARMCPU *cpu;
 
     ipod_touch_cpu_setup(machine, &sysmem, &cpu, &nsas);
+
+    // setup clock
+    nms->sysclk = clock_new(OBJECT(machine), "SYSCLK");
+    clock_set_hz(nms->sysclk, 12000000ULL);
 
     nms->cpu = cpu;
 

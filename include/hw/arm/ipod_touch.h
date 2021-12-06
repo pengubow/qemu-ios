@@ -23,11 +23,11 @@
 #define CLOCK1_CONFIG0 0x0
 #define CLOCK1_CONFIG1 0x4
 #define CLOCK1_CONFIG2 0x8
-#define CLOCK1_PLLLOCK 0x40
 #define CLOCK1_PLL0CON 0x20
 #define CLOCK1_PLL1CON 0x24
 #define CLOCK1_PLL2CON 0x28
 #define CLOCK1_PLL3CON 0x2C
+#define CLOCK1_PLLLOCK 0x40
 #define CLOCK1_PLLMODE 0x44
 
 // timer stuff
@@ -76,7 +76,6 @@ typedef struct s5l8900_clk1_s
     uint32_t    clk1_pll2con;
     uint32_t    clk1_pll3con;
 	uint32_t    clk1_plllock;
-	uint32_t	clk1_pllmode;
 
 } s5l8900_clk1_s;
 
@@ -100,6 +99,7 @@ typedef struct s5l8900_timer_s
 	uint32_t    prescaler;
 	uint32_t    irqstat;
     QEMUTimer *st_timer;
+    Clock *sysclk;
 	uint32_t bcreload;
     uint32_t freq_out;
     uint64_t tick_interval;
@@ -128,6 +128,7 @@ typedef struct {
 	s5l8900_usb_phys_s *usb_phys;
 	S5L8900AESState *aes_state;
 	S5L8900SHA1State *sha1_state;
+	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;
 	uint32_t uart_mmio_pa;

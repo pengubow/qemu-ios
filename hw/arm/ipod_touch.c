@@ -16,6 +16,9 @@
 #include "hw/arm/ipod_touch_spi.h"
 #include "hw/arm/exynos4210.h"
 #include "hw/dma/pl080.h"
+#include "ui/console.h"
+#include "hw/display/framebuffer.h"
+#include "crypto/aes.h"
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
 #define IBOOT_BASE 0x18000000
@@ -59,6 +62,7 @@
 #define MBX_MEM_BASE 0x3B000000
 #define ENGINE_8900_MEM_BASE 0x3F000000
 #define KERNELCACHE_BASE 0x9000000
+#define FRAMEBUFFER_MEM_BASE 0xfe00000
 
 static void ipod_touch_cpu_setup(MachineState *machine, MemoryRegion **sysmem, ARMCPU **cpu, AddressSpace **nsas)
 {
@@ -430,6 +434,97 @@ static const MemoryRegionOps mbx_ops = {
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
+/*
+LCD DISPLAY
+*/
+#include "ui/pixel_ops.h"
+
+static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
+{
+    return 0;
+}
+
+static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    //printf("LCD: Writing %d to 0x%08x\n", val, addr);
+}
+
+static void lcd_invalidate(void *opaque)
+{
+    s5l8900_lcd_state *s = opaque;
+    s->invalidate = 1;
+}
+
+static void draw_line32_32(void *opaque, uint8_t *d, const uint8_t *s, int width, int deststep)
+{
+    uint16_t v;
+    uint8_t r, g, b;
+
+    do {
+        //v = lduw_le_p((void *) s);
+        //printf("V: %d\n", *s);
+        r = s[1];
+        g = s[2];
+        b = s[3];
+        ((uint32_t *) d)[0] = rgb_to_pixel32(r, g, b);
+        s += 4;
+        d += 4;
+    } while (-- width != 0);
+}
+
+static void lcd_refresh(void *opaque)
+{
+    s5l8900_lcd_state *lcd = (s5l8900_lcd_state *) opaque;
+    DisplaySurface *surface = qemu_console_surface(lcd->con);
+    drawfn draw_line;
+    int src_width, dest_width;
+    int height, first, last;
+    int width, linesize;
+
+    if (!lcd || !lcd->con || !surface_bits_per_pixel(surface))
+        return;
+
+    dest_width = 4;
+    draw_line = draw_line32_32;
+
+    /* Resolution */
+    first = last = 0;
+    width = 320;
+    height = 480;
+    lcd->invalidate = 1;
+
+    src_width =  4 * width;
+    linesize = surface_stride(surface);
+
+    if(lcd->invalidate) {
+        framebuffer_update_memory_section(&lcd->fbsection, lcd->sysmem, FRAMEBUFFER_MEM_BASE, height, 4 * width);
+    }
+
+    framebuffer_update_display(surface, &lcd->fbsection,
+                               width, height,
+                               src_width,       /* Length of source line, in bytes.  */
+                               linesize,        /* Bytes between adjacent horizontal output pixels.  */
+                               dest_width,      /* Bytes between adjacent vertical output pixels.  */
+                               lcd->invalidate,
+                               draw_line, NULL,
+                               &first, &last);
+    if (first >= 0) {
+        dpy_gfx_update(lcd->con, 0, first, width, last - first + 1);
+    }
+    lcd->invalidate = 0;
+}
+
+static const MemoryRegionOps lcd_ops = {
+    .read = s5l8900_lcd_read,
+    .write = s5l8900_lcd_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static const GraphicHwOps s5l8900_gfx_ops = {
+    .invalidate  = lcd_invalidate,
+    .gfx_update  = lcd_refresh,
+};
+
 static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
@@ -523,7 +618,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     // phys_ptr += align_64k_high(dtb_size);
 
     // // allocate framebuffer memory
-    allocate_ram(sysmem, "framebuffer", phys_ptr, align_64k_high(3 * 320 * 480));
+    //allocate_ram(sysmem, "framebuffer", phys_ptr, align_64k_high(3 * 320 * 480));
 
     // // load boot args
     // macho_setup_bootargs("k_bootargs.n45", nsas, sysmem, kbootargs_pa, virt_base, IPOD_TOUCH_PHYS_BASE, mem_size, top_of_kernel_data_pa, dtb_va, dtb_size, nms->kern_args, phys_ptr);
@@ -578,7 +673,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "i2c0", I2C0_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "i2c1", I2C1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "display", DISPLAY_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "uart1", UART1_MEM_BASE, align_64k_high(0x4000));
     allocate_ram(sysmem, "uart2", UART2_MEM_BASE, align_64k_high(0x4000));
@@ -589,7 +683,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis1", IIS1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
 
-    allocate_ram(sysmem, "iboot_framebuffer", 0xfe000000, align_64k_high(3 * 320 * 480));
+    allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
 
     // setup 1MB NOR
     dinfo = drive_get(IF_PFLASH, 0, 0);
@@ -725,6 +819,11 @@ static void ipod_touch_machine_init(MachineState *machine)
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
 
+    // init LCD
+    DeviceState *lcd_dev = sysbus_create_simple(TYPE_IPOD_TOUCH_LCD, DISPLAY_MEM_BASE, NULL);
+    s5l8900_lcd_state *lcd_state = IPOD_TOUCH_LCD(lcd_dev);
+    lcd_state->sysmem = sysmem;
+
     // init AES engine
     S5L8900AESState *aes_state = malloc(sizeof(S5L8900AESState));
     nms->aes_state = aes_state;
@@ -809,6 +908,23 @@ static void ipod_touch_machine_init(MachineState *machine)
     qemu_register_reset(ipod_touch_cpu_reset, nms);
 }
 
+static void s5l8900_lcd_realize(DeviceState *dev, Error **errp)
+{
+    s5l8900_lcd_state *s = IPOD_TOUCH_LCD(dev);
+    s->con = graphic_console_init(dev, 0, &s5l8900_gfx_ops, s);
+    qemu_console_resize(s->con, 320, 480);
+}
+
+static void s5l8900_lcd_init(Object *obj)
+{
+    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+    DeviceState *dev = DEVICE(sbd);
+    s5l8900_lcd_state *s = IPOD_TOUCH_LCD(dev);
+
+    memory_region_init_io(&s->iomem, obj, &lcd_ops, s, "lcd", 0x1000);
+    sysbus_init_mmio(sbd, &s->iomem);
+}
+
 static void ipod_touch_machine_class_init(ObjectClass *klass, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(klass);
@@ -827,9 +943,25 @@ static const TypeInfo ipod_touch_machine_info = {
     .instance_init = ipod_touch_instance_init,
 };
 
+static void s5l8900_lcd_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+
+    dc->realize = s5l8900_lcd_realize;
+}
+
+static const TypeInfo ipod_touch_lcd_info = {
+    .name          = TYPE_IPOD_TOUCH_LCD,
+    .parent        = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(s5l8900_lcd_state),
+    .instance_init = s5l8900_lcd_init,
+    .class_init    = s5l8900_lcd_class_init,
+};
+
 static void ipod_touch_machine_types(void)
 {
     type_register_static(&ipod_touch_machine_info);
+    type_register_static(&ipod_touch_lcd_info);
 }
 
 type_init(ipod_touch_machine_types)

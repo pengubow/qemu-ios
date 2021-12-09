@@ -14,9 +14,10 @@
 #include "cpu.h"
 
 #define TYPE_IPOD_TOUCH "iPod-Touch"
+#define TYPE_IPOD_TOUCH_LCD "ipod_touch_lcd"
+OBJECT_DECLARE_SIMPLE_TYPE(s5l8900_lcd_state, IPOD_TOUCH_LCD)
 
 #define TYPE_IPOD_TOUCH_MACHINE   MACHINE_TYPE_NAME(TYPE_IPOD_TOUCH)
-
 #define IPOD_TOUCH_MACHINE(obj) \
     OBJECT_CHECK(IPodTouchMachineState, (obj), TYPE_IPOD_TOUCH_MACHINE)
 
@@ -115,6 +116,16 @@ typedef struct s5l8900_sysic_s
 	uint32_t power_state;
 
 } s5l8900_sysic_s;
+
+typedef struct s5l8900_lcd_state
+{
+    SysBusDevice parent_obj;
+    MemoryRegion *sysmem;
+    MemoryRegion iomem;
+    QemuConsole *con;
+    int invalidate;
+    MemoryRegionSection fbsection;
+} s5l8900_lcd_state;
 
 typedef struct {
 	MachineState parent;

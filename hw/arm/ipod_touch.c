@@ -18,7 +18,7 @@
 #include "hw/dma/pl080.h"
 #include "ui/console.h"
 #include "hw/display/framebuffer.h"
-#include "crypto/aes.h"
+#include <openssl/aes.h>
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
 #define IBOOT_BASE 0x18000000
@@ -828,14 +828,14 @@ static void ipod_touch_machine_init(MachineState *machine)
     S5L8900AESState *aes_state = malloc(sizeof(S5L8900AESState));
     nms->aes_state = aes_state;
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(s), &aes_ops, s, "aes", 0x100);
+    memory_region_init_io(iomem, OBJECT(s), &aes_ops, nms->aes_state, "aes", 0x100);
     memory_region_add_subregion(sysmem, AES_MEM_BASE, iomem);
 
     // init SHA1 engine
     S5L8900SHA1State *sha1_state = malloc(sizeof(S5L8900SHA1State));
     nms->sha1_state = sha1_state;
     iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(s), &sha1_ops, s, "sha1", 0x100);
+    memory_region_init_io(iomem, OBJECT(s), &sha1_ops, nms->sha1_state, "sha1", 0x100);
     memory_region_add_subregion(sysmem, SHA1_MEM_BASE, iomem);
 
     // init 8900 engine

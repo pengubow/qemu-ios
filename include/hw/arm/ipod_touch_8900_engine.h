@@ -6,7 +6,7 @@
 #include "hw/hw.h"
 #include "exec/hwaddr.h"
 #include "exec/memory.h"
-#include "crypto/aes.h"
+#include <openssl/aes.h>
 
 typedef struct {
 	unsigned char magic[ 4 ];

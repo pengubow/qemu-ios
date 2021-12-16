@@ -125,6 +125,9 @@ typedef struct s5l8900_lcd_state
     QemuConsole *con;
     int invalidate;
     MemoryRegionSection fbsection;
+    uint32_t framebuffer_base;
+    uint32_t display_resolution_info;
+    uint32_t display_depth_info;
 } s5l8900_lcd_state;
 
 typedef struct {

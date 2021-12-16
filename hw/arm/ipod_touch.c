@@ -441,12 +441,37 @@ LCD DISPLAY
 
 static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 {
+    s5l8900_lcd_state *s = (s5l8900_lcd_state *)opaque;
+    switch(addr)
+    {
+        case 0x74:
+            return s->display_depth_info;
+        case 0x78:
+            return s->framebuffer_base;
+        case 0x7c:
+            return s->display_resolution_info;
+        default:
+            break;
+    }
     return 0;
 }
 
 static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
-    //printf("LCD: Writing %d to 0x%08x\n", val, addr);
+    s5l8900_lcd_state *s = (s5l8900_lcd_state *)opaque;
+    printf("LCD: Writing %d to 0x%08x\n", val, addr);
+
+    switch(addr) {
+        case 0x74:
+            s->display_depth_info = val;
+            break;
+        case 0x78:
+            s->framebuffer_base = val;
+            break;
+        case 0x7c:
+            s->display_resolution_info = val;
+            break;
+    }
 }
 
 static void lcd_invalidate(void *opaque)

@@ -304,22 +304,26 @@ static const MemoryRegionOps sysic_ops = {
 /*
 NAND
 */
-int nand_cmd_status = 0;
-
 static uint64_t s5l8900_nand_read(void *opaque, hwaddr addr, unsigned size)
 {
+    s5l8900_nand_s *s = (s5l8900_nand_s *) opaque;
+
     switch (addr) {
-        case 0x80:
-            if(nand_cmd_status == 0x90) {
-                //return 0x2555D5EC;
-                return 0;
+        case NAND_FMCTRL0:
+            return s->fmctrl0;
+        case NAND_FMFIFO:
+            if(s->cmd == NAND_CMD_ID) {
+                return 0x2555D5EC;
+                //return 0;
             }
-            else if(nand_cmd_status == 0x70) {
+            else if(s->cmd == NAND_CMD_READSTATUS) {
                 return (1 << 6);
             }
 
-        case 0x48:
+        case NAND_FMCSTAT:
             return (1 << 1) | (1 << 2) | (1 << 3); // set bit 2 and 4 to indicate that the FTM is ready
+        case NAND_RSCTRL:
+            return s->rsctrl;
         default:
             break;
     }
@@ -328,9 +332,18 @@ static uint64_t s5l8900_nand_read(void *opaque, hwaddr addr, unsigned size)
 
 static void s5l8900_nand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
+    s5l8900_nand_s *s = (s5l8900_nand_s *) opaque;
+
     switch(addr) {
-        case 0x8:
-            nand_cmd_status = val;
+        case NAND_FMCTRL0:
+            s->fmctrl0 = val;
+            break;
+        case NAND_CMD:
+            s->cmd = val;
+            break;
+        case NAND_RSCTRL:
+            s->rsctrl = val;
+            break;
         default:
             break; 
     }
@@ -459,7 +472,7 @@ static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     s5l8900_lcd_state *s = (s5l8900_lcd_state *)opaque;
-    printf("LCD: Writing %d to 0x%08x\n", val, addr);
+    //printf("LCD: Writing %d to 0x%08x\n", val, addr);
 
     switch(addr) {
         case 0x74:
@@ -918,14 +931,18 @@ static void ipod_touch_machine_init(MachineState *machine)
     object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
     memory_region_add_subregion(sysmem, DMAC0_MEM_BASE, &pl080_1->iomem);
     SysBusDevice *busdev = SYS_BUS_DEVICE(dev);
+    sysbus_realize(busdev, &error_fatal);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_DMAC0_IRQ));
 
     dev = qdev_new("pl080");
     PL080State *pl080_2 = PL080(dev);
     object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
     memory_region_add_subregion(sysmem, DMAC1_MEM_BASE, &pl080_2->iomem);
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_realize(busdev, &error_fatal);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_DMAC1_IRQ));
 
+    // init MBX
     iomem = g_new(MemoryRegion, 1);
     memory_region_init_io(iomem, OBJECT(nms), &mbx_ops, NULL, "mbx", 0x1000000);
     memory_region_add_subregion(sysmem, MBX_MEM_BASE, iomem);

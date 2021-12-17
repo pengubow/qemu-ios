@@ -62,7 +62,18 @@ OBJECT_DECLARE_SIMPLE_TYPE(s5l8900_lcd_state, IPOD_TOUCH_LCD)
 #define S5L8900_SPI2_IRQ 0xB
 
 #define S5L8900_DMAC0_IRQ 0x10
-#define S5L8900_DMAC1_IRQ 0x11 
+#define S5L8900_DMAC1_IRQ 0x11
+
+// NAND
+#define NAND_FMCTRL0 0x0
+#define NAND_CMD     0x8
+#define NAND_FMCSTAT 0x48
+#define NAND_FMFIFO  0x80
+#define NAND_RSCTRL  0x100
+
+#define NAND_CMD_ID  0x90
+#define NAND_CMD_READSTATUS 0x70
+
 
 typedef struct {
     MachineClass parent;
@@ -110,6 +121,13 @@ typedef struct s5l8900_timer_s
 	qemu_irq	irq;
 
 } s5l8900_timer_s;
+
+typedef struct s5l8900_nand_s
+{
+	uint32_t fmctrl0;
+	uint32_t rsctrl;
+	uint32_t cmd;
+} s5l8900_nand_s;
 
 typedef struct s5l8900_sysic_s
 {

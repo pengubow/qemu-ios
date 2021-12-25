@@ -64,6 +64,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(s5l8900_lcd_state, IPOD_TOUCH_LCD)
 #define S5L8900_DMAC0_IRQ 0x10
 #define S5L8900_DMAC1_IRQ 0x11
 
+#define S5L8900_NAND_ECC_IRQ 0x2B
+
 // NAND
 #define NAND_FMCTRL0 0x0
 #define NAND_CMD     0x8
@@ -74,6 +76,13 @@ OBJECT_DECLARE_SIMPLE_TYPE(s5l8900_lcd_state, IPOD_TOUCH_LCD)
 #define NAND_CMD_ID  0x90
 #define NAND_CMD_READSTATUS 0x70
 
+// NAND ECC
+#define NANDECC_DATA 0x4
+#define NANDECC_ECC 0x8
+#define NANDECC_START 0xC
+#define NANDECC_STATUS 0x10
+#define NANDECC_SETUP 0x14
+#define NANDECC_CLEARINT 0x40
 
 typedef struct {
     MachineClass parent;
@@ -129,6 +138,15 @@ typedef struct s5l8900_nand_s
 	uint32_t cmd;
 } s5l8900_nand_s;
 
+typedef struct s5l8900_nand_ecc_s
+{
+	uint32_t data_addr;
+	uint32_t ecc_addr;
+	uint32_t status;
+	uint32_t setup;
+	qemu_irq irq;
+} s5l8900_nand_ecc_s;
+
 typedef struct s5l8900_sysic_s
 {
 	uint32_t power_state;
@@ -160,6 +178,8 @@ typedef struct {
 	s5l8900_usb_phys_s *usb_phys;
 	S5L8900AESState *aes_state;
 	S5L8900SHA1State *sha1_state;
+	s5l8900_nand_s *nand_state;
+	s5l8900_nand_ecc_s *nand_ecc_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

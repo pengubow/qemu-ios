@@ -83,6 +83,8 @@ static void pl080_update(PL080State *s)
     bool tclevel = (s->tc_int & s->tc_mask);
     bool errlevel = (s->err_int & s->err_mask);
 
+    //printf("Setting irq: %d\n", errlevel || tclevel);
+
     qemu_set_irq(s->interr, errlevel);
     qemu_set_irq(s->inttc, tclevel);
     qemu_set_irq(s->irq, errlevel || tclevel);
@@ -146,8 +148,8 @@ again:
                     size = 0;
                 break;
             case 2:
-                if ((req & (1u << src_id)) == 0)
-                    size = 0;
+                // if ((req & (1u << src_id)) == 0)
+                //     size = 0;
                 break;
             case 3:
                 if ((req & (1u << src_id)) == 0
@@ -204,6 +206,7 @@ again:
                     ch->conf &= ~PL080_CCONF_E;
                 }
                 if (ch->ctrl & PL080_CCTRL_I) {
+                    //printf("Setting interrupt status of channel %d\n", c);
                     s->tc_int |= 1 << c;
                 }
             }
@@ -212,6 +215,7 @@ again:
         if (--s->running)
             s->running = 1;
     }
+    pl080_update(s);
 }
 
 static uint64_t pl080_read(void *opaque, hwaddr offset,
@@ -288,6 +292,8 @@ static void pl080_write(void *opaque, hwaddr offset,
 {
     PL080State *s = (PL080State *)opaque;
     int i;
+
+    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, value, offset);
 
     if (offset >= 0x100 && offset < 0x200) {
         i = (offset & 0xe0) >> 5;

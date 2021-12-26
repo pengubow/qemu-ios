@@ -12,7 +12,7 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
             return s->fmctrl0;
         case NAND_FMFIFO:
             if(s->cmd == NAND_CMD_ID) {
-                return 0xA514D3AD;
+                return NAND_CHIP_ID;
             }
             else if(s->cmd == NAND_CMD_READSTATUS) {
                 return (1 << 6);
@@ -40,8 +40,25 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
         case NAND_FMCTRL0:
             s->fmctrl0 = val;
             break;
+        case NAND_FMCTRL1:
+            s->fmctrl1 = val;
+            break;
+        case NAND_FMADDR0:
+            printf("Writing %d to addr 0\n", val);
+            s->fmaddr0 = val;
+            break;
+        case NAND_FMADDR1:
+            printf("Writing %d to addr 1\n", val);
+            s->fmaddr1 = val;
+            break;
+        case NAND_FMANUM:
+            s->fmanum = val;
+            break;
         case NAND_CMD:
             s->cmd = val;
+            break;
+        case NAND_FMDNUM:
+            s->fmdnum = val;
             break;
         case NAND_RSCTRL:
             s->rsctrl = val;
@@ -64,6 +81,9 @@ static void itnand_init(Object *obj)
 
     memory_region_init_io(&s->iomem, OBJECT(s), &nand_ops, s, "nand", 0x1000);
     sysbus_init_irq(sbd, &s->irq);
+
+    // open the files containing the NAND banks backend
+    s->bank_file = fopen("/Users/martijndevos/Documents/generate_nand/nand/bank0", "wb");
 }
 
 static void itnand_reset(DeviceState *d)
@@ -71,6 +91,11 @@ static void itnand_reset(DeviceState *d)
     ITNandState *s = (ITNandState *) d;
 
     s->fmctrl0 = 0;
+    s->fmctrl1 = 0;
+    s->fmaddr0 = 0;
+    s->fmaddr1 = 0;
+    s->fmanum = 0;
+    s->fmdnum = 0;
     s->rsctrl = 0;
     s->cmd = 0;
 }

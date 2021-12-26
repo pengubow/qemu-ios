@@ -303,105 +303,6 @@ static const MemoryRegionOps sysic_ops = {
 };
 
 /*
-NAND
-*/
-static int nand_read_cnt = 0;
-
-static uint64_t s5l8900_nand_read(void *opaque, hwaddr addr, unsigned size)
-{
-    s5l8900_nand_s *s = (s5l8900_nand_s *) opaque;
-    //fprintf(stderr, "%s: reading from 0x%08x\n", __func__, addr);
-
-    switch (addr) {
-        case NAND_FMCTRL0:
-            return s->fmctrl0;
-        case NAND_FMFIFO:
-            if(s->cmd == NAND_CMD_ID) {
-                return 0xA514D3AD;
-            }
-            else if(s->cmd == NAND_CMD_READSTATUS) {
-                return (1 << 6);
-            }
-            else {
-                nand_read_cnt++;
-                return 0x43303032;
-            }
-
-        case NAND_FMCSTAT:
-            return (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12); // this indicates that everything is ready, including our eight banks
-        case NAND_RSCTRL:
-            return s->rsctrl;
-        default:
-            break;
-    }
-    return 0;
-}
-
-static void s5l8900_nand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
-{
-    s5l8900_nand_s *s = (s5l8900_nand_s *) opaque;
-
-    switch(addr) {
-        case NAND_FMCTRL0:
-            s->fmctrl0 = val;
-            break;
-        case NAND_CMD:
-            s->cmd = val;
-            break;
-        case NAND_RSCTRL:
-            s->rsctrl = val;
-            break;
-        default:
-            break; 
-    }
-}
-
-static const MemoryRegionOps nand_ops = {
-    .read = s5l8900_nand_read,
-    .write = s5l8900_nand_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-};
-
-/*
-NAND ECC
-*/
-static uint64_t s5l8900_nand_ecc_read(void *opaque, hwaddr addr, unsigned size)
-{
-    s5l8900_nand_ecc_s *s = (s5l8900_nand_ecc_s *) opaque;
-    //fprintf(stderr, "%s: reading from 0x%08x\n", __func__, addr);
-
-    switch (addr) {
-        case NANDECC_STATUS:
-            return 0; // TODO: for now, we assume that all ECC operations are successful
-        default:
-            break;
-    }
-    return 0;
-}
-
-static void s5l8900_nand_ecc_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
-{
-    s5l8900_nand_ecc_s *s = (s5l8900_nand_ecc_s *) opaque;
-
-    switch(addr) {
-        case NANDECC_START:
-            qemu_irq_raise(s->irq);
-            break;
-        case NANDECC_CLEARINT:
-            qemu_irq_lower(s->irq);
-            break;
-        default:
-            break;
-    }
-}
-
-static const MemoryRegionOps nand_ecc_ops = {
-    .read = s5l8900_nand_ecc_read,
-    .write = s5l8900_nand_ecc_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-};
-
-/*
 USB PHYS
 */
 static uint64_t s5l8900_usb_phys_read(void *opaque, hwaddr addr, unsigned size)
@@ -928,19 +829,18 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, ENGINE_8900_MEM_BASE, iomem);
 
     // init NAND flash
-    s5l8900_nand_s *nand_state = malloc(sizeof(s5l8900_nand_s));
+    dev = qdev_new("itnand");
+    ITNandState *nand_state = ITNAND(dev);
     nms->nand_state = nand_state;
-    iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(s), &nand_ops, s, "nand", 0x1000);
-    memory_region_add_subregion(sysmem, NAND_MEM_BASE, iomem);
+    memory_region_add_subregion(sysmem, NAND_MEM_BASE, &nand_state->iomem);
 
     // init NAND ECC module
-    s5l8900_nand_ecc_s *nand_ecc_state = malloc(sizeof(s5l8900_nand_ecc_s));
+    dev = qdev_new("itnand_ecc");
+    ITNandECCState *nand_ecc_state = ITNANDECC(dev);
     nms->nand_ecc_state = nand_ecc_state;
-    nand_ecc_state->irq = s5l8900_get_irq(nms, S5L8900_NAND_ECC_IRQ);
-    iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(s), &nand_ecc_ops, nand_ecc_state, "nandecc", 0x100);
-    memory_region_add_subregion(sysmem, NAND_ECC_MEM_BASE, iomem);
+    SysBusDevice *busdev = SYS_BUS_DEVICE(dev);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_NAND_ECC_IRQ));
+    memory_region_add_subregion(sysmem, NAND_ECC_MEM_BASE, &nand_ecc_state->iomem);
 
     // init USB OTG
     dev = ipod_touch_init_usb_otg(nms->irq[0][13], s5l8900_usb_hwcfg);
@@ -986,7 +886,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     PL080State *pl080_1 = PL080(dev);
     object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
     memory_region_add_subregion(sysmem, DMAC0_MEM_BASE, &pl080_1->iomem);
-    SysBusDevice *busdev = SYS_BUS_DEVICE(dev);
+    busdev = SYS_BUS_DEVICE(dev);
     sysbus_realize(busdev, &error_fatal);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_DMAC0_IRQ));
 

@@ -317,7 +317,7 @@ static uint64_t s5l8900_nand_read(void *opaque, hwaddr addr, unsigned size)
             return s->fmctrl0;
         case NAND_FMFIFO:
             if(s->cmd == NAND_CMD_ID) {
-                return 0x2555D5EC;
+                return 0xA514D3AD;
             }
             else if(s->cmd == NAND_CMD_READSTATUS) {
                 return (1 << 6);

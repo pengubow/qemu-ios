@@ -1,7 +1,5 @@
 #include "hw/arm/ipod_touch_nand.h"
 
-static int nand_read_cnt = 0;
-
 static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
@@ -18,8 +16,38 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
                 return (1 << 6);
             }
             else {
-                nand_read_cnt++;
-                return 0x43303032;
+                uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
+                if(page != s->buffered_page) {
+                    // refresh the buffered page
+                    FILE *f = fopen("/Users/martijndevos/Documents/generate_nand/nand/bank0", "rb");
+                    if (f == NULL) { hw_error("Unable to read file!"); }
+                    uint64_t page_begin_offset = page * NAND_BYTES_PER_PAGE;
+                    fseek(f, page_begin_offset, SEEK_SET);
+                    fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
+                    fclose(f);
+                    
+                    // cache the spare page
+                    f = fopen("/Users/martijndevos/Documents/generate_nand/nand/bank0_spare", "rb");
+                    if (f == NULL) { hw_error("Unable to read file!"); }
+                    uint64_t spare_begin_offset = page * NAND_BYTES_PER_SPARE;
+                    fseek(f, spare_begin_offset, SEEK_SET);
+                    fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
+                    fclose(f);
+
+                    s->buffered_page = page;
+                    //printf("Buffered page: %d\n", s->buffered_page);
+                }
+
+                uint32_t read_val = 0;
+                if(s->reading_spare) {
+                    read_val = ((uint32_t *)s->page_spare_buffer)[(NAND_BYTES_PER_SPARE - s->fmdnum - 1) / 4];
+                } else {
+                    read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum - 1) / 4];
+                } 
+
+                s->fmdnum -= 4;
+
+                return read_val;
             }
 
         case NAND_FMCSTAT:
@@ -44,11 +72,9 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
             s->fmctrl1 = val;
             break;
         case NAND_FMADDR0:
-            printf("Writing %d to addr 0\n", val);
             s->fmaddr0 = val;
             break;
         case NAND_FMADDR1:
-            printf("Writing %d to addr 1\n", val);
             s->fmaddr1 = val;
             break;
         case NAND_FMANUM:
@@ -58,6 +84,11 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
             s->cmd = val;
             break;
         case NAND_FMDNUM:
+            if(val == NAND_BYTES_PER_SPARE - 1) {
+                s->reading_spare = 1;
+            } else {
+                s->reading_spare = 0;
+            }
             s->fmdnum = val;
             break;
         case NAND_RSCTRL:
@@ -82,8 +113,9 @@ static void itnand_init(Object *obj)
     memory_region_init_io(&s->iomem, OBJECT(s), &nand_ops, s, "nand", 0x1000);
     sysbus_init_irq(sbd, &s->irq);
 
-    // open the files containing the NAND banks backend
-    s->bank_file = fopen("/Users/martijndevos/Documents/generate_nand/nand/bank0", "wb");
+    s->page_buffer = (uint8_t *)malloc(NAND_BYTES_PER_PAGE);
+    s->page_spare_buffer = (uint8_t *)malloc(NAND_BYTES_PER_SPARE);
+    s->buffered_page = -1;
 }
 
 static void itnand_reset(DeviceState *d)
@@ -98,6 +130,8 @@ static void itnand_reset(DeviceState *d)
     s->fmdnum = 0;
     s->rsctrl = 0;
     s->cmd = 0;
+    s->reading_spare = 0;
+    s->buffered_page = -1;
 }
 
 static void itnand_class_init(ObjectClass *oc, void *data)

@@ -7,6 +7,9 @@
 #include "hw/hw.h"
 #include "hw/irq.h"
 
+#define NAND_BYTES_PER_PAGE 2048
+#define NAND_BYTES_PER_SPARE 64
+
 #define NAND_CHIP_ID 0xA514D3AD
 
 #define NAND_FMCTRL0  0x0
@@ -37,8 +40,12 @@ typedef struct ITNandState {
     uint32_t fmdnum;
 	uint32_t rsctrl;
 	uint32_t cmd;
+	uint8_t reading_spare;
     qemu_irq irq;
-    FILE *bank_file;
+
+    uint8_t *page_buffer;
+    uint8_t *page_spare_buffer;
+    uint32_t buffered_page;
 } ITNandState;
 
 #endif

@@ -578,9 +578,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     // allocate UART ram
     allocate_ram(sysmem, "ram", RAM_MEM_BASE, 0x8000000);
 
-    uint32_t start = 0xf000000;
-    allocate_ram(sysmem, "unknown??", start, 0x10000000 - start);
-
     // load the bootrom (vrom)
     uint8_t *file_data = NULL;
     unsigned long fsize;
@@ -610,18 +607,9 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     //     address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     //  }
 
-    // load the kernelcache at 0x09000000
-    file_data = NULL;
-    if (g_file_get_contents(nms->kernel_filename, (char **)&file_data, &fsize, NULL)) {
-        allocate_ram(sysmem, "kernel", KERNELCACHE_BASE, align_64k_high(fsize));
-        address_space_rw(nsas, KERNELCACHE_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
-    }
-
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "i2c0", I2C0_MEM_BASE, align_64k_high(0x1));
-    allocate_ram(sysmem, "i2c1", I2C1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "uart1", UART1_MEM_BASE, align_64k_high(0x4000));
@@ -819,6 +807,20 @@ static void ipod_touch_machine_init(MachineState *machine)
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_realize(busdev, &error_fatal);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_DMAC1_IRQ));
+
+    // init two I2C controllers
+    dev = qdev_new("ipodtouch.i2c");
+    IPodTouchI2CState *i2c_state = IPOD_TOUCH_I2C(dev);
+    nms->i2c0_state = i2c_state;
+    memory_region_add_subregion(sysmem, I2C0_MEM_BASE, &i2c_state->iomem);
+
+    dev = qdev_new("ipodtouch.i2c");
+    i2c_state = IPOD_TOUCH_I2C(dev);
+    nms->i2c1_state = i2c_state;
+    memory_region_add_subregion(sysmem, I2C1_MEM_BASE, &i2c_state->iomem);
+
+    // init the PMU
+    I2CSlave *pmu = i2c_slave_create_simple(i2c_state->bus, "pcf50633", 0x0);
 
     // init MBX
     iomem = g_new(MemoryRegion, 1);

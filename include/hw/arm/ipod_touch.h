@@ -13,6 +13,8 @@
 #include "hw/arm/ipod_touch_usb_otg.h"
 #include "hw/arm/ipod_touch_nand.h"
 #include "hw/arm/ipod_touch_nand_ecc.h"
+#include "hw/arm/ipod_touch_pcf50633_pmu.h"
+#include "hw/i2c/ipod_touch_i2c.h"
 #include "cpu.h"
 
 #define TYPE_IPOD_TOUCH "iPod-Touch"
@@ -148,6 +150,8 @@ typedef struct {
 	S5L8900SHA1State *sha1_state;
 	ITNandState *nand_state;
 	ITNandECCState *nand_ecc_state;
+	IPodTouchI2CState *i2c0_state;
+	IPodTouchI2CState *i2c1_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

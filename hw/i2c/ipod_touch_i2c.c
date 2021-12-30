@@ -30,7 +30,8 @@ static void s5l8900_i2c_update(IPodTouchI2CState *s)
 
     if (s->control & S5L8900_IICCON_IRQPEND)
         level = 0;
-    //qemu_set_irq(s->irq, !!level);
+
+    qemu_irq_raise(s->irq);
 }
 
 static int s5l8900_i2c_receive(IPodTouchI2CState *s)
@@ -75,14 +76,16 @@ static uint64_t ipod_touch_i2c_read(void *opaque, hwaddr offset, unsigned size)
         return s->line_ctrl;
     case IICREG20:
         {
-            uint32_t tmp_reg20 = s->iicreg20; 
-            s->iicreg20 &= ~0x100; 
-            s->iicreg20 &= ~0x2000; 
+            // clear the flags
+            uint32_t tmp_reg20 = s->iicreg20;
+            s->iicreg20 &= ~0x100;
+            s->iicreg20 &= ~0x2000;
             return tmp_reg20; 
         }
     default:
+        break;
         //hw_error("s5l8900.i2c: bad read offset 0x" TARGET_FMT_plx "\n", offset);
-        fprintf(stderr, "%s: bad read offset 0x%08x\n", __func__, offset);
+        //fprintf(stderr, "%s: bad read offset 0x%08x\n", __func__, offset);
     }
     return 0;
 }
@@ -106,8 +109,8 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
             s->iicreg20 |= 0x2000;
         }
         s->control = value & 0xff;
-        if (value & S5L8900_IICCON_IRQEN)
-            s5l8900_i2c_update(s);
+
+        qemu_irq_raise(s->irq);
         break;
 
     case I2CSTAT:
@@ -183,8 +186,9 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
         //s->iicreg20 &= ~value;
         break;
     default:
+        break;
         //hw_error("s5l8900.i2c: bad write offset 0x" TARGET_FMT_plx "\n", offset);
-        fprintf(stderr, "%s: bad write offset 0x%08x\n", __func__, offset);
+        //fprintf(stderr, "%s: bad write offset 0x%08x\n", __func__, offset);
     }
 }
 

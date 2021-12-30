@@ -812,11 +812,15 @@ static void ipod_touch_machine_init(MachineState *machine)
     dev = qdev_new("ipodtouch.i2c");
     IPodTouchI2CState *i2c_state = IPOD_TOUCH_I2C(dev);
     nms->i2c0_state = i2c_state;
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_I2C0_IRQ));
     memory_region_add_subregion(sysmem, I2C0_MEM_BASE, &i2c_state->iomem);
 
     dev = qdev_new("ipodtouch.i2c");
     i2c_state = IPOD_TOUCH_I2C(dev);
     nms->i2c1_state = i2c_state;
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_I2C1_IRQ));
     memory_region_add_subregion(sysmem, I2C1_MEM_BASE, &i2c_state->iomem);
 
     // init the PMU

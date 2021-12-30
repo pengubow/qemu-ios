@@ -9,6 +9,7 @@ static int pcf50633_event(I2CSlave *i2c, enum i2c_event event)
 static uint8_t pcf50633_recv(I2CSlave *i2c)
 {
     Pcf50633State *s = PCF50633(i2c);
+    //printf("Reading PMU register %d\n", s->cmd);
 
     switch(s->cmd) {
         case PMU_MBCS1:
@@ -22,7 +23,6 @@ static uint8_t pcf50633_recv(I2CSlave *i2c)
         case 0x76:
             return 0; // unknown register
         default:
-            printf("AT RECV %d\n", s->cmd);
             return 0;
     }
 }

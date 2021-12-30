@@ -820,7 +820,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, I2C1_MEM_BASE, &i2c_state->iomem);
 
     // init the PMU
-    I2CSlave *pmu = i2c_slave_create_simple(i2c_state->bus, "pcf50633", 0x0);
+    I2CSlave *pmu = i2c_slave_create_simple(i2c_state->bus, "pcf50633", 0x73);
 
     // init MBX
     iomem = g_new(MemoryRegion, 1);

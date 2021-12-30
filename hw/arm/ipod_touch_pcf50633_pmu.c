@@ -2,22 +2,35 @@
 
 static int pcf50633_event(I2CSlave *i2c, enum i2c_event event)
 {
-    printf("AT EVENT %d\n", event);
     // TODO
     return 0;
 }
 
 static uint8_t pcf50633_recv(I2CSlave *i2c)
 {
-    printf("AT RECV\n");
-    // TODO
-    return 0;
+    Pcf50633State *s = PCF50633(i2c);
+
+    switch(s->cmd) {
+        case PMU_MBCS1:
+            return 0; // battery power source
+        case PMU_ADCC1:
+            return 0; // battery charge voltage
+        case 0x67:
+            return 1; // whether we should enable debug UARTS
+        case 0x69:
+            return 0; // boot count error/panic
+        case 0x76:
+            return 0; // unknown register
+        default:
+            printf("AT RECV %d\n", s->cmd);
+            return 0;
+    }
 }
 
 static int pcf50633_send(I2CSlave *i2c, uint8_t data)
 {
-    printf("AT SEND %d\n", data);
-    // TODO
+    Pcf50633State *s = PCF50633(i2c);
+    s->cmd = data;
     return 0;
 }
 

@@ -22,219 +22,169 @@
 
 #include "hw/i2c/ipod_touch_i2c.h"
 
-#ifndef IPOD_TOUCH_I2C_DEBUG
-#define IPOD_TOUCH_I2C_DEBUG                 0
-#endif
-
-#if IPOD_TOUCH_I2C_DEBUG
-#define DPRINT(fmt, args...)              \
-    do { fprintf(stderr, "QEMU I2C: "fmt, ## args); } while (0)
-
-static const char *ipod_touch_i2c_get_regname(unsigned offset)
+static void s5l8900_i2c_update(IPodTouchI2CState *s)
 {
-    switch (offset) {
-    case I2CCON_ADDR:
-        return "I2CCON";
-    case I2CSTAT_ADDR:
-        return "I2CSTAT";
-    case I2CADD_ADDR:
-        return "I2CADD";
-    case I2CDS_ADDR:
-        return "I2CDS";
-    case I2CLC_ADDR:
-        return "I2CLC";
-    case I2C_REG20:
-        return "I2CREG20";
-    default:
-        return "[?]";
-    }
+    uint16_t level;
+    level = (s->status & S5L8900_IICSTAT_START) &&
+            (s->control & S5L8900_IICCON_IRQEN);
+
+    if (s->control & S5L8900_IICCON_IRQPEND)
+        level = 0;
+    //qemu_set_irq(s->irq, !!level);
 }
 
-#else
-#define DPRINT(fmt, args...)              do { } while (0)
-#endif
-
-static inline void ipod_touch_i2c_raise_interrupt(IPodTouchI2CState *s)
+static int s5l8900_i2c_receive(IPodTouchI2CState *s)
 {
-    if (s->i2ccon & I2CCON_INTRS_EN) {
-        s->i2ccon |= I2CCON_INT_PEND;
-        qemu_irq_raise(s->irq);
-    }
+    int r;
+    r = i2c_recv(s->bus);
+    s5l8900_i2c_update(s);
+    return r;
 }
 
-static void ipod_touch_i2c_data_receive(void *opaque)
+static int s5l8900_i2c_send(IPodTouchI2CState *s, uint8_t data)
 {
-    IPodTouchI2CState *s = (IPodTouchI2CState *)opaque;
-
-    s->i2cstat &= ~I2CSTAT_LAST_BIT;
-    s->scl_free = false;
-    s->i2cds = i2c_recv(s->bus);
-    ipod_touch_i2c_raise_interrupt(s);
-}
-
-static void ipod_touch_i2c_data_send(void *opaque)
-{
-    IPodTouchI2CState *s = (IPodTouchI2CState *)opaque;
-
-    s->i2cstat &= ~I2CSTAT_LAST_BIT;
-    s->scl_free = false;
-    s->iicreg20 |= 0x100;
-    if (i2c_send(s->bus, s->i2cds) < 0 && (s->i2ccon & I2CCON_ACK_GEN)) {
-        s->i2cstat |= I2CSTAT_LAST_BIT;
-    }
-    ipod_touch_i2c_raise_interrupt(s);
-}
-
-static uint64_t ipod_touch_i2c_read(void *opaque, hwaddr offset,
-                                 unsigned size)
-{
-    IPodTouchI2CState *s = (IPodTouchI2CState *)opaque;
-    uint8_t value;
-
-    switch (offset) {
-    case I2CCON_ADDR:
-        value = s->i2ccon;
-        break;
-    case I2CSTAT_ADDR:
-        value = s->i2cstat;
-        break;
-    case I2CADD_ADDR:
-        value = s->i2cadd;
-        break;
-    case I2CDS_ADDR:
-        value = s->i2cds;
-        s->scl_free = true;
+    if (!(s->status & S5L8900_IICSTAT_LASTBIT)) {
+        s->status |= S5L8900_IICCON_ACKEN;
+        s->data = data;
         s->iicreg20 |= 0x100;
-        if (IPOD_TOUCH_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Rx &&
-               (s->i2cstat & I2CSTAT_START_BUSY) &&
-               !(s->i2ccon & I2CCON_INT_PEND)) {
-            ipod_touch_i2c_data_receive(s);
-        }
-        break;
-    case I2CLC_ADDR:
-        value = s->i2clc;
-        break;
-    case I2C_REG20:
-        {
-            uint32_t tmp_reg20 = s->iicreg20;
-            s->iicreg20 &= ~0x100;
-            s->iicreg20 &= ~0x2000;
-            return tmp_reg20;
-        }
-    default:
-        value = 0;
-        DPRINT("ERROR: Bad read offset 0x%x\n", (unsigned int)offset);
-        break;
+        i2c_send(s->bus, s->data);
     }
-
-    DPRINT("read %s [0x%02x] -> 0x%02x\n", ipod_touch_i2c_get_regname(offset),
-            (unsigned int)offset, value);
-    return value;
+    s5l8900_i2c_update(s);
+    return 1;
 }
 
-static void ipod_touch_i2c_write(void *opaque, hwaddr offset,
-                              uint64_t value, unsigned size)
+/* I2C read function */
+static uint64_t ipod_touch_i2c_read(void *opaque, hwaddr offset, unsigned size)
 {
     IPodTouchI2CState *s = (IPodTouchI2CState *)opaque;
-    uint8_t v = value & 0xff;
 
-    DPRINT("write %s [0x%02x] <- 0x%02x\n", ipod_touch_i2c_get_regname(offset),
-            (unsigned int)offset, v);
+    //fprintf(stderr, "s5l8900_i2c_read(): offset = 0x%08x\n", offset);
 
     switch (offset) {
-    case I2CCON_ADDR:
-        if(value & ~(I2CCON_ACK_GEN)) {
+    case I2CCON:
+        return s->control;
+    case I2CSTAT:
+        return s->status;
+    case I2CADD:
+        return s->address;
+    case I2CDS:
+        s->iicreg20 |= 0x100;
+        s->data = s5l8900_i2c_receive(s);
+        return s->data;
+    case I2CLC:
+        return s->line_ctrl;
+    case IICREG20:
+        {
+            uint32_t tmp_reg20 = s->iicreg20; 
+            s->iicreg20 &= ~0x100; 
+            s->iicreg20 &= ~0x2000; 
+            return tmp_reg20; 
+        }
+    default:
+        //hw_error("s5l8900.i2c: bad read offset 0x" TARGET_FMT_plx "\n", offset);
+        fprintf(stderr, "%s: bad read offset 0x%08x\n", __func__, offset);
+    }
+    return 0;
+}
+
+/* I2C write function */
+static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    IPodTouchI2CState *s = (IPodTouchI2CState *)opaque;
+    int mode;
+
+    //fprintf(stderr, "s5l8900_i2c_write: offset = 0x%08x, val = 0x%08x\n", offset, value);
+
+    qemu_irq_lower(s->irq);
+
+    switch (offset) {
+    case I2CCON:
+        if(value & ~(S5L8900_IICCON_ACKEN)) {
             s->iicreg20 |= 0x100;
         }
-        if((value & 0x10) && (s->i2cstat == 0x90))  {
+        if((value & 0x10) && (s->status == 0x90))  {
             s->iicreg20 |= 0x2000;
         }
+        s->control = value & 0xff;
+        if (value & S5L8900_IICCON_IRQEN)
+            s5l8900_i2c_update(s);
+        break;
 
-        s->i2ccon = (v & ~I2CCON_INT_PEND) | (s->i2ccon & I2CCON_INT_PEND);
-        if ((s->i2ccon & I2CCON_INT_PEND) && !(v & I2CCON_INT_PEND)) {
-            s->i2ccon &= ~I2CCON_INT_PEND;
-            qemu_irq_lower(s->irq);
-            if (!(s->i2ccon & I2CCON_INTRS_EN)) {
-                s->i2cstat &= ~I2CSTAT_START_BUSY;
-            }
+    case I2CSTAT:
+        /* We have to make sure we don't miss an end transfer */
+        if((!s->active) && ((s->status >> 6) != ((value >> 6)))) {
+            s->status = value & 0xff;
+        /* If they toggle the tx bit then we have to force an end transfer before mode update */
+        } else if((s->active) && ((s->status >> 6) != ((value >> 6)))) {
+                    i2c_end_transfer(s->bus);
+                    s->active=0;
+                    s->status = value & 0xff;
+                    s->status |= S5L8900_IICSTAT_TXRXEN;
+                    break;
+        }
+        mode = (s->status >> 6) & 0x3;
+        if (value & S5L8900_IICSTAT_TXRXEN) {
+            /* IIC-bus data output enable/disable bit */
+            switch(mode) {
+            case SR_MODE:
+                s->data = s5l8900_i2c_receive(s);
+                break;
+            case ST_MODE:
+                s->data = s5l8900_i2c_receive(s);
+                break;
+            case MR_MODE:
+                if (value & S5L8900_IICSTAT_START) {
+                    /* START condition */
+                    s->status &= ~S5L8900_IICSTAT_LASTBIT;
 
-            if (s->i2cstat & I2CSTAT_START_BUSY) {
-                if (s->scl_free) {
-                    if (IPOD_TOUCH_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Tx) {
-                        ipod_touch_i2c_data_send(s);
-                    } else if (IPOD_TOUCH_I2C_MODE(s->i2cstat) ==
-                            I2CMODE_MASTER_Rx) {
-                        ipod_touch_i2c_data_receive(s);
-                    }
+                    s->iicreg20 |= 0x100;
+                    s->active = 1;
+                    i2c_start_transfer(s->bus, s->data >> 1, 1);
                 } else {
-                    s->i2ccon |= I2CCON_INT_PEND;
-                    qemu_irq_raise(s->irq);
+                    i2c_end_transfer(s->bus);
+                    s->active = 0;
+                    s->status |= S5L8900_IICSTAT_TXRXEN;
                 }
+                break;
+            case MT_MODE:
+                if (value & S5L8900_IICSTAT_START) {
+                    /* START condition */
+                    s->status &= ~S5L8900_IICSTAT_LASTBIT;
+                        
+                    s->iicreg20 |= 0x100;
+                    s->active = 1;
+                    i2c_start_transfer(s->bus, s->data >> 1, 0);
+                } else {
+                    i2c_end_transfer(s->bus);
+                    s->active = 0;
+                    s->status |= S5L8900_IICSTAT_TXRXEN;
+                }
+                break;
+            default:
+                break;
             }
         }
+        s5l8900_i2c_update(s);
         break;
-    case I2CSTAT_ADDR:
-        s->i2cstat =
-                (s->i2cstat & I2CSTAT_START_BUSY) | (v & ~I2CSTAT_START_BUSY);
 
-        if (!(s->i2cstat & I2CSTAT_OUTPUT_EN)) {
-            s->i2cstat &= ~I2CSTAT_START_BUSY;
-            s->scl_free = true;
-            qemu_irq_lower(s->irq);
-            break;
-        }
+    case I2CADD:
+        s->address = value & 0xff;
+        break;
 
-        /* Nothing to do if in i2c slave mode */
-        if (!I2C_IN_MASTER_MODE(s->i2cstat)) {
-            break;
-        }
+    case I2CDS:
+        s5l8900_i2c_send(s, value & 0xff);
+        break;
 
-        if (v & I2CSTAT_START_BUSY) {
-            s->i2cstat &= ~I2CSTAT_LAST_BIT;
-            s->i2cstat |= I2CSTAT_START_BUSY;    /* Line is busy */
-            s->scl_free = false;
+    case I2CLC:
+        s->line_ctrl = value & 0xff;
+        break;
 
-            /* Generate start bit and send slave address */
-            s->iicreg20 |= 0x100;
-            if (i2c_start_transfer(s->bus, s->i2cds >> 1, s->i2cds & 0x1) &&
-                    (s->i2ccon & I2CCON_ACK_GEN)) {
-                s->i2cstat |= I2CSTAT_LAST_BIT;
-            } else if (IPOD_TOUCH_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Rx) {
-                ipod_touch_i2c_data_receive(s);
-            }
-            ipod_touch_i2c_raise_interrupt(s);
-        } else {
-            i2c_end_transfer(s->bus);
-            if (!(s->i2ccon & I2CCON_INT_PEND)) {
-                s->i2cstat &= ~I2CSTAT_START_BUSY;
-            }
-            s->scl_free = true;
-        }
-        break;
-    case I2CADD_ADDR:
-        if ((s->i2cstat & I2CSTAT_OUTPUT_EN) == 0) {
-            s->i2cadd = v;
-        }
-        break;
-    case I2CDS_ADDR:
-        if (s->i2cstat & I2CSTAT_OUTPUT_EN) {
-            s->i2cds = v;
-            s->scl_free = true;
-            if (IPOD_TOUCH_I2C_MODE(s->i2cstat) == I2CMODE_MASTER_Tx &&
-                    (s->i2cstat & I2CSTAT_START_BUSY) &&
-                    !(s->i2ccon & I2CCON_INT_PEND)) {
-                ipod_touch_i2c_data_send(s);
-            }
-        }
-        break;
-    case I2CLC_ADDR:
-        s->i2clc = v;
-        break;
-    case I2C_REG20:
+    case IICREG20:
+        //s->iicreg20 &= ~value;
         break;
     default:
-        DPRINT("ERROR: Bad write offset 0x%x\n", (unsigned int)offset);
-        break;
+        //hw_error("s5l8900.i2c: bad write offset 0x" TARGET_FMT_plx "\n", offset);
+        fprintf(stderr, "%s: bad write offset 0x%08x\n", __func__, offset);
     }
 }
 
@@ -243,19 +193,6 @@ static const MemoryRegionOps ipod_touch_i2c_ops = {
     .write = ipod_touch_i2c_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
-
-static void ipod_touch_i2c_reset(DeviceState *d)
-{
-    IPodTouchI2CState *s = IPOD_TOUCH_I2C(d);
-
-    s->i2ccon  = 0x00;
-    s->i2cstat = 0x00;
-    s->i2cds   = 0xFF;
-    s->i2clc   = 0x00;
-    s->i2cadd  = 0xFF;
-    s->iicreg20 = 0x0;
-    s->scl_free = true;
-}
 
 static void ipod_touch_i2c_init(Object *obj)
 {
@@ -267,6 +204,11 @@ static void ipod_touch_i2c_init(Object *obj)
     sysbus_init_mmio(sbd, &s->iomem);
     sysbus_init_irq(sbd, &s->irq);
     s->bus = i2c_init_bus(dev, "i2c");
+}
+
+static void ipod_touch_i2c_reset(DeviceState *d)
+{
+    
 }
 
 static void ipod_touch_i2c_class_init(ObjectClass *klass, void *data)

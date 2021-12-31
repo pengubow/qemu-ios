@@ -10,7 +10,7 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
             return s->fmctrl0;
         case NAND_FMFIFO:
             if(s->cmd == NAND_CMD_ID) {
-                return NAND_CHIP_ID;
+                return 0; //NAND_CHIP_ID;
             }
             else if(s->cmd == NAND_CMD_READSTATUS) {
                 return (1 << 6);

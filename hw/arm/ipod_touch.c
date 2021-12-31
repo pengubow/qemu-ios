@@ -61,6 +61,7 @@
 #define MBX_MEM_BASE 0x3B000000
 #define ENGINE_8900_MEM_BASE 0x3F000000
 #define KERNELCACHE_BASE 0x9000000
+#define SDIO_MEM_BASE 0x38d00000
 #define FRAMEBUFFER_MEM_BASE 0xfe00000
 
 static void allocate_ram(MemoryRegion *top, const char *name, uint32_t addr, uint32_t size)
@@ -384,6 +385,8 @@ static uint64_t s5l8900_mbx_read(void *opaque, hwaddr addr, unsigned size)
     {
         case 0x12c:
             return 0x100;
+        case 0xf00:
+            return (1 << 0x18) | 0x10000; // seems to be some kind of identifier
         case 0x1020:
             return 0x10000;
         default:
@@ -394,6 +397,7 @@ static uint64_t s5l8900_mbx_read(void *opaque, hwaddr addr, unsigned size)
 
 static void s5l8900_mbx_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
+    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
     // do nothing
 }
 
@@ -620,6 +624,8 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis0", IIS0_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "iis1", IIS1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
+
+    allocate_ram(sysmem, "sdio", SDIO_MEM_BASE, 4096);
 
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
 

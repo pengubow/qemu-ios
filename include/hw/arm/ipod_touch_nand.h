@@ -7,6 +7,7 @@
 #include "hw/hw.h"
 #include "hw/irq.h"
 
+#define NAND_NUM_BANKS 8
 #define NAND_BYTES_PER_PAGE 2048
 #define NAND_BYTES_PER_SPARE 64
 
@@ -45,6 +46,7 @@ typedef struct ITNandState {
 
     uint8_t *page_buffer;
     uint8_t *page_spare_buffer;
+    uint32_t buffered_bank;
     uint32_t buffered_page;
 } ITNandState;
 

@@ -1,5 +1,15 @@
 #include "hw/arm/ipod_touch_nand.h"
 
+static int get_bank(ITNandState *s) {
+    uint32_t bank_bitmap = (s->fmctrl0 >> 1) & 0xFF;
+    for(int bank = 0; bank < NAND_NUM_BANKS; bank++) {
+        if((bank_bitmap & (1 << bank)) != 0) {
+            return bank;
+        }
+    }
+    return -1;
+}
+
 static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
@@ -10,32 +20,39 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
             return s->fmctrl0;
         case NAND_FMFIFO:
             if(s->cmd == NAND_CMD_ID) {
-                return 0; //NAND_CHIP_ID;
+                return NAND_CHIP_ID;
             }
             else if(s->cmd == NAND_CMD_READSTATUS) {
                 return (1 << 6);
             }
             else {
+                uint32_t bank = get_bank(s);
+                if(bank == -1) {
+                    hw_error("Active bank not set while nand_read is called!");
+                }
+
                 uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
-                if(page != s->buffered_page) {
+                if(bank != s->buffered_bank || page != s->buffered_page) {
                     // refresh the buffered page
-                    FILE *f = fopen("/Users/martijndevos/Documents/generate_nand/nand/bank0", "rb");
-                    if (f == NULL) { hw_error("Unable to read file!"); }
-                    uint64_t page_begin_offset = page * NAND_BYTES_PER_PAGE;
-                    fseek(f, page_begin_offset, SEEK_SET);
-                    fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-                    fclose(f);
-                    
-                    // cache the spare page
-                    f = fopen("/Users/martijndevos/Documents/generate_nand/nand/bank0_spare", "rb");
-                    if (f == NULL) { hw_error("Unable to read file!"); }
-                    uint64_t spare_begin_offset = page * NAND_BYTES_PER_SPARE;
-                    fseek(f, spare_begin_offset, SEEK_SET);
-                    fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
-                    fclose(f);
+                    char filename[200];
+                    sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", bank, page);
+                    struct stat st = {0};
+                    if (stat(filename, &st) == -1) {
+                        // page storage does not exist - initialize an empty buffer
+                        s->page_buffer = calloc(NAND_BYTES_PER_PAGE, sizeof(char));
+                        s->page_spare_buffer = calloc(NAND_BYTES_PER_PAGE, sizeof(char));
+                    }
+                    else {
+                        FILE *f = fopen(filename, "rb");
+                        if (f == NULL) { hw_error("Unable to read file!"); }
+                        fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
+                        fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
+                        fclose(f);
+                    }
 
                     s->buffered_page = page;
-                    //printf("Buffered page: %d\n", s->buffered_page);
+                    s->buffered_bank = bank;
+                    //printf("Buffered bank: %d, page: %d\n", s->buffered_bank, s->buffered_page);
                 }
 
                 uint32_t read_val = 0;
@@ -116,6 +133,7 @@ static void itnand_init(Object *obj)
     s->page_buffer = (uint8_t *)malloc(NAND_BYTES_PER_PAGE);
     s->page_spare_buffer = (uint8_t *)malloc(NAND_BYTES_PER_SPARE);
     s->buffered_page = -1;
+    s->buffered_bank = -1;
 }
 
 static void itnand_reset(DeviceState *d)

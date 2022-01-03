@@ -57,7 +57,7 @@
 #define UART2_MEM_BASE 0x3CC08000
 #define UART3_MEM_BASE 0x3CC0C000
 #define UART4_MEM_BASE 0x3CC10000
-#define ADM_MEM_BASE 0x38800000  // TODO unused!
+#define ADM_MEM_BASE 0x38800000
 #define MBX_MEM_BASE 0x3B000000
 #define ENGINE_8900_MEM_BASE 0x3F000000
 #define KERNELCACHE_BASE 0x9000000
@@ -261,54 +261,6 @@ static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
 static const MemoryRegionOps clock1_ops = {
     .read = s5l8900_clock1_read,
     .write = s5l8900_clock1_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-};
-
-/*
-SYSIC
-*/
-
-static uint64_t s5l8900_sysic_read(void *opaque, hwaddr addr, unsigned size)
-{
-    s5l8900_sysic_s *s = (s5l8900_sysic_s *) opaque;
-
-    switch (addr) {
-        case POWER_ID:
-            //return (3 << 24); //for older iboots
-            return (2 << 0x18);
-        case 0x7a:
-        case 0x7c:
-            return 1;
-        case POWER_SETSTATE:
-        case POWER_STATE:
-            return s->power_state;
-      default:
-        break;
-    }
-    return 0;
-}
-
-static void s5l8900_sysic_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
-{
-    s5l8900_sysic_s *s = (s5l8900_sysic_s *) opaque;
-
-    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
-    switch (addr) {
-        case POWER_ONCTRL:
-            if(val == 0x20 || val == 0x4) { break; } // ugly workaround
-            s->power_state = val;
-            break;
-        case POWER_OFFCTRL:
-            s->power_state = val;
-            break;
-        default:
-            break;
-    }
-}
-
-static const MemoryRegionOps sysic_ops = {
-    .read = s5l8900_sysic_read,
-    .write = s5l8900_sysic_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
@@ -563,15 +515,6 @@ static void ipod_touch_init_timer(MachineState *machine, MemoryRegion *sysmem)
     memory_region_add_subregion(sysmem, TIMER1_MEM_BASE, iomem);
 }
 
-static void ipod_touch_init_sysic(MachineState *machine, MemoryRegion *sysmem)
-{
-    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
-    nms->sysic = (s5l8900_sysic_s *) g_malloc0(sizeof(struct s5l8900_sysic_s));
-    MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(nms), &sysic_ops, nms->sysic, "sysic", 0x1000);
-    memory_region_add_subregion(sysmem, SYSIC_MEM_BASE, iomem);
-}
-
 static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem, AddressSpace *nsas)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
@@ -700,7 +643,10 @@ static void ipod_touch_machine_init(MachineState *machine)
     ipod_touch_init_timer(machine, sysmem);
 
     // init sysic
-    ipod_touch_init_sysic(machine, sysmem);
+    dev = qdev_new("ipodtouch.sysic");
+    IPodTouchSYSICState *sysic_state = IPOD_TOUCH_SYSIC(dev);
+    nms->sysic = (IPodTouchSYSICState *) g_malloc0(sizeof(struct IPodTouchSYSICState));
+    memory_region_add_subregion(sysmem, SYSIC_MEM_BASE, &sysic_state->iomem);
 
     dev = exynos4210_uart_create(UART0_MEM_BASE, 256, 0, serial_hd(0), nms->irq[0][24]);
     if (!dev) {
@@ -828,6 +774,14 @@ static void ipod_touch_machine_init(MachineState *machine)
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_I2C1_IRQ));
     memory_region_add_subregion(sysmem, I2C1_MEM_BASE, &i2c_state->iomem);
+
+    // init the ADM
+    dev = qdev_new("ipodtouch.adm");
+    IPodTouchADMState *adm_state = IPOD_TOUCH_ADM(dev);
+    nms->adm_state = adm_state;
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_ADM_IRQ));
+    memory_region_add_subregion(sysmem, ADM_MEM_BASE, &adm_state->iomem);
 
     // init the PMU
     I2CSlave *pmu = i2c_slave_create_simple(i2c_state->bus, "pcf50633", 0x73);

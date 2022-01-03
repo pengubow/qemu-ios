@@ -14,6 +14,8 @@
 #include "hw/arm/ipod_touch_nand.h"
 #include "hw/arm/ipod_touch_nand_ecc.h"
 #include "hw/arm/ipod_touch_pcf50633_pmu.h"
+#include "hw/arm/ipod_touch_adm.h"
+#include "hw/arm/ipod_touch_sysic.h"
 #include "hw/i2c/ipod_touch_i2c.h"
 #include "cpu.h"
 
@@ -54,13 +56,6 @@ OBJECT_DECLARE_SIMPLE_TYPE(s5l8900_lcd_state, IPOD_TOUCH_LCD)
 #define S5L8900_VIC_N	  2
 #define S5L8900_VIC_SIZE  32
 
-// SYSIC
-#define POWER_ID 0x44
-#define POWER_ONCTRL 0xC
-#define POWER_OFFCTRL 0x10
-#define POWER_SETSTATE 0x8
-#define POWER_STATE 0x14
-
 #define S5L8900_SPI0_IRQ 0x9
 #define S5L8900_SPI1_IRQ 0xA
 #define S5L8900_SPI2_IRQ 0xB
@@ -70,6 +65,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(s5l8900_lcd_state, IPOD_TOUCH_LCD)
 
 #define S5L8900_I2C0_IRQ 0x15
 #define S5L8900_I2C1_IRQ 0x16
+
+#define S5L8900_ADM_IRQ 0x25
 
 #define S5L8900_NAND_ECC_IRQ 0x2B
 
@@ -120,12 +117,6 @@ typedef struct s5l8900_timer_s
 
 } s5l8900_timer_s;
 
-typedef struct s5l8900_sysic_s
-{
-	uint32_t power_state;
-
-} s5l8900_sysic_s;
-
 typedef struct s5l8900_lcd_state
 {
     SysBusDevice parent_obj;
@@ -147,7 +138,7 @@ typedef struct {
 	synopsys_usb_state *usb_otg;
 	s5l8900_clk1_s *clock1;
 	s5l8900_timer_s *timer1;
-	s5l8900_sysic_s *sysic;
+	IPodTouchSYSICState *sysic;
 	s5l8900_usb_phys_s *usb_phys;
 	S5L8900AESState *aes_state;
 	S5L8900SHA1State *sha1_state;
@@ -155,6 +146,7 @@ typedef struct {
 	ITNandECCState *nand_ecc_state;
 	IPodTouchI2CState *i2c0_state;
 	IPodTouchI2CState *i2c1_state;
+	IPodTouchADMState *adm_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

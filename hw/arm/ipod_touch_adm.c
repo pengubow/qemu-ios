@@ -6,7 +6,12 @@ static uint64_t ipod_touch_adm_read(void *opaque, hwaddr offset, unsigned size)
 
     fprintf(stderr, "s5l8900_adm_read(): offset = 0x%08x\n", offset);
 
-    // TODO
+    switch (offset) {
+        case 0x0: // this seems to be the control register
+            return 0x2; // this seems to indicate that the device is ready
+        default:
+            break;
+    }
 
     return 0;
 }

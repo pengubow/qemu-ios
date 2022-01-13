@@ -366,9 +366,15 @@ LCD DISPLAY
 
 static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 {
+    //fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+
     s5l8900_lcd_state *s = (s5l8900_lcd_state *)opaque;
     switch(addr)
     {
+        case 0x4:
+            return s->lcd_con;
+        case 0x8:
+            return s->lcd_con2;
         case 0x74:
             return s->display_depth_info;
         case 0x78:
@@ -384,9 +390,15 @@ static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     s5l8900_lcd_state *s = (s5l8900_lcd_state *)opaque;
-    //printf("LCD: Writing %d to 0x%08x\n", val, addr);
+    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
 
     switch(addr) {
+        case 0x4:
+            s->lcd_con = val;
+            break;
+        case 0x8:
+            s->lcd_con2 = val;
+            break;
         case 0x74:
             s->display_depth_info = val;
             break;

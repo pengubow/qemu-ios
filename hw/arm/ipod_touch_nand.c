@@ -35,7 +35,7 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
                 if(bank != s->buffered_bank || page != s->buffered_page) {
                     // refresh the buffered page
                     char filename[200];
-                    sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", bank, page);
+                    sprintf(filename, "/Users/martijndevos/Documents/generate-ipod-touch-1g-nand/nand/bank%d/%d.page", bank, page);
                     struct stat st = {0};
                     if (stat(filename, &st) == -1) {
                         // page storage does not exist - initialize an empty buffer

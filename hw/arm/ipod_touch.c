@@ -567,7 +567,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     //  }
 
     allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
-    allocate_ram(sysmem, "chipid", CHIPID_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
 
@@ -802,6 +801,12 @@ static void ipod_touch_machine_init(MachineState *machine)
     iomem = g_new(MemoryRegion, 1);
     memory_region_init_io(iomem, OBJECT(nms), &mbx_ops, NULL, "mbx", 0x1000000);
     memory_region_add_subregion(sysmem, MBX_MEM_BASE, iomem);
+
+    // init the chip ID module
+    dev = qdev_new("ipodtouch.chipid");
+    IPodTouchChipIDState *chipid_state = IPOD_TOUCH_CHIPID(dev);
+    nms->chipid_state = chipid_state;
+    memory_region_add_subregion(sysmem, CHIPID_MEM_BASE, &chipid_state->iomem);
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
 }

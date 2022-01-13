@@ -16,6 +16,7 @@
 #include "hw/arm/ipod_touch_pcf50633_pmu.h"
 #include "hw/arm/ipod_touch_adm.h"
 #include "hw/arm/ipod_touch_sysic.h"
+#include "hw/arm/ipod_touch_chipid.h"
 #include "hw/i2c/ipod_touch_i2c.h"
 #include "cpu.h"
 
@@ -149,6 +150,7 @@ typedef struct {
 	IPodTouchI2CState *i2c0_state;
 	IPodTouchI2CState *i2c1_state;
 	IPodTouchADMState *adm_state;
+	IPodTouchChipIDState *chipid_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

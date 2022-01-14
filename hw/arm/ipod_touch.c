@@ -490,7 +490,7 @@ static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
     nms->clock1 = (s5l8900_clk1_s *) g_malloc0(sizeof(struct s5l8900_clk1_s));
-    nms->clock1->clk1_plllock = 1;
+    nms->clock1->clk1_plllock = 1 | 2 | 4 | 8;
 
     uint64_t config0 = 0x0;
     config0 |= (1 << 24); // indicate that we have a memory divisor

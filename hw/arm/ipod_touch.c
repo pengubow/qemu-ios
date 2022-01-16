@@ -790,7 +790,9 @@ static void ipod_touch_machine_init(MachineState *machine)
     dev = qdev_new("ipodtouch.adm");
     IPodTouchADMState *adm_state = IPOD_TOUCH_ADM(dev);
     nms->adm_state = adm_state;
+    object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
     busdev = SYS_BUS_DEVICE(dev);
+    sysbus_realize(busdev, &error_fatal);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_ADM_IRQ));
     memory_region_add_subregion(sysmem, ADM_MEM_BASE, &adm_state->iomem);
 

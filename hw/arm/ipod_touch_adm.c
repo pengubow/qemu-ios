@@ -11,6 +11,8 @@ static uint64_t ipod_touch_adm_read(void *opaque, hwaddr offset, unsigned size)
     switch (offset) {
         case ADM_CTRL: // this seems to be the control register
             return 0x2; // this seems to indicate that the device is ready
+        case ADM_CTRL2:
+            return 0x10; // indicates that a upload event has been finished
         default:
             break;
     }
@@ -32,6 +34,23 @@ static void ipod_touch_adm_write(void *opaque, hwaddr offset, uint64_t value, un
                 uint32_t *data = (uint32_t *) malloc(sizeof(uint32_t));
                 data[0] = 0x50;
                 address_space_rw(&s->downstream_as, s->data2_sec_addr, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+
+                // dunno, write some bytes to data4_sec_addr to indicate that the NAND banks are ready
+                data = (uint32_t *) malloc(sizeof(uint32_t) * 8);
+                for(int i = 0; i < 8; i++) {
+                    data[i] = NAND_CHIP_ID;
+                }
+                
+                address_space_rw(&s->downstream_as, s->data3_sec_addr, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 8 * sizeof(uint32_t), 1);
+            }
+            break;
+        case ADM_CTRL2:
+            if(value == 0x2) {
+                // TODO TESTING
+                qemu_irq_raise(s->irq);
+            }
+            if((value & 0x2) == 0) {
+                qemu_irq_lower(s->irq);
             }
             break;
         case ADM_CODE_SEC_ADDR:

@@ -80,6 +80,7 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
+    fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
 
     switch(addr) {
         case NAND_FMCTRL0:

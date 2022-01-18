@@ -6,11 +6,13 @@
 #include "qemu/timer.h"
 #include "hw/sysbus.h"
 #include "hw/irq.h"
+#include "hw/arm/ipod_touch_nand.h"
 
 #define TYPE_IPOD_TOUCH_ADM                "ipodtouch.adm"
 OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchADMState, IPOD_TOUCH_ADM)
 
 #define ADM_CTRL 0x0
+#define ADM_CTRL2 0x4
 #define ADM_CODE_SEC_ADDR 0x50
 #define ADM_DATA1_SEC_ADDR 0x84
 #define ADM_DATA2_SEC_ADDR 0x88

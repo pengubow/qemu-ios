@@ -10,6 +10,36 @@ static int get_bank(ITNandState *s) {
     return -1;
 }
 
+void nand_set_buffered_page(ITNandState *s, uint32_t page) {
+    uint32_t bank = get_bank(s);
+    if(bank == -1) {
+        hw_error("Active bank not set while nand_read is called!");
+    }
+
+    if(bank != s->buffered_bank || page != s->buffered_page) {
+        // refresh the buffered page
+        char filename[200];
+        sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", bank, page);
+        struct stat st = {0};
+        if (stat(filename, &st) == -1) {
+            // page storage does not exist - initialize an empty buffer
+            s->page_buffer = calloc(NAND_BYTES_PER_PAGE, sizeof(char));
+            s->page_spare_buffer = calloc(NAND_BYTES_PER_SPARE, sizeof(char));
+        }
+        else {
+            FILE *f = fopen(filename, "rb");
+            if (f == NULL) { hw_error("Unable to read file!"); }
+            fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
+            fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
+            fclose(f);
+        }
+
+        s->buffered_page = page;
+        s->buffered_bank = bank;
+        printf("Buffered bank: %d, page: %d\n", s->buffered_bank, s->buffered_page);
+    }
+}
+
 static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
@@ -26,34 +56,8 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
                 return (1 << 6);
             }
             else {
-                uint32_t bank = get_bank(s);
-                if(bank == -1) {
-                    hw_error("Active bank not set while nand_read is called!");
-                }
-
                 uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
-                if(bank != s->buffered_bank || page != s->buffered_page) {
-                    // refresh the buffered page
-                    char filename[200];
-                    sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", bank, page);
-                    struct stat st = {0};
-                    if (stat(filename, &st) == -1) {
-                        // page storage does not exist - initialize an empty buffer
-                        s->page_buffer = calloc(NAND_BYTES_PER_PAGE, sizeof(char));
-                        s->page_spare_buffer = calloc(NAND_BYTES_PER_PAGE, sizeof(char));
-                    }
-                    else {
-                        FILE *f = fopen(filename, "rb");
-                        if (f == NULL) { hw_error("Unable to read file!"); }
-                        fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-                        fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
-                        fclose(f);
-                    }
-
-                    s->buffered_page = page;
-                    s->buffered_bank = bank;
-                    //printf("Buffered bank: %d, page: %d\n", s->buffered_bank, s->buffered_page);
-                }
+                nand_set_buffered_page(s, page);
 
                 uint32_t read_val = 0;
                 if(s->reading_spare) {
@@ -80,7 +84,7 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
-    fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
 
     switch(addr) {
         case NAND_FMCTRL0:

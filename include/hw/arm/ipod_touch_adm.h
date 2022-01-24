@@ -31,6 +31,8 @@ typedef struct IPodTouchADMState {
 
     MemoryRegion *downstream;
     AddressSpace downstream_as;
+
+    ITNandState *nand_state;
 } IPodTouchADMState;
 
 #endif

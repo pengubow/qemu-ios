@@ -789,6 +789,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     // init the ADM
     dev = qdev_new("ipodtouch.adm");
     IPodTouchADMState *adm_state = IPOD_TOUCH_ADM(dev);
+    adm_state->nand_state = nand_state;
     nms->adm_state = adm_state;
     object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
     busdev = SYS_BUS_DEVICE(dev);

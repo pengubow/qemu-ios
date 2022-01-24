@@ -25,6 +25,7 @@
 #define NAND_RSCTRL   0x100
 
 #define NAND_CMD_ID  0x90
+#define NAND_CMD_READ 0x30
 #define NAND_CMD_READSTATUS 0x70
 
 #define TYPE_ITNAND "itnand"
@@ -49,5 +50,7 @@ typedef struct ITNandState {
     uint32_t buffered_bank;
     uint32_t buffered_page;
 } ITNandState;
+
+void nand_set_buffered_page(ITNandState *s, uint32_t page);
 
 #endif

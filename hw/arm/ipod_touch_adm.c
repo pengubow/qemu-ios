@@ -1,12 +1,23 @@
 #include "hw/arm/ipod_touch_adm.h"
 #include "hw/qdev-properties.h"
+#include "hw/arm/ipod_touch_nand.h"
 #include "qapi/error.h"
+
+static void set_bank(ITNandState *s, uint32_t activate_bank) {
+    for(int bank = 0; bank < 8; bank++) {
+        // clear bit, toggle if it is active
+        s->fmctrl0 &= ~(1 << (bank + 1));
+        if(bank == activate_bank) {
+            s->fmctrl0 ^= 1 << (bank + 1);
+        }
+    }
+}
 
 static uint64_t ipod_touch_adm_read(void *opaque, hwaddr offset, unsigned size)
 {
     //IPodTouchADMState *s = (IPodTouchADMState *)opaque;
 
-    fprintf(stderr, "s5l8900_adm_read(): offset = 0x%08x\n", offset);
+    //fprintf(stderr, "s5l8900_adm_read(): offset = 0x%08x\n", offset);
 
     switch (offset) {
         case ADM_CTRL: // this seems to be the control register
@@ -24,7 +35,7 @@ static void ipod_touch_adm_write(void *opaque, hwaddr offset, uint64_t value, un
 {
     IPodTouchADMState *s = (IPodTouchADMState *)opaque;
 
-    fprintf(stderr, "s5l8900_adm_write: offset = 0x%08x, val = 0x%08x\n", offset, value);
+    //fprintf(stderr, "s5l8900_adm_write: offset = 0x%08x, val = 0x%08x\n", offset, value);
 
     switch(offset) {
         case ADM_CTRL:
@@ -46,7 +57,35 @@ static void ipod_touch_adm_write(void *opaque, hwaddr offset, uint64_t value, un
             break;
         case ADM_CTRL2:
             if(value == 0x2) {
-                // TODO TESTING
+                // read the command and initialize the right device
+                uint32_t *buf = malloc(4);
+                address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x24, MEMTXATTRS_UNSPECIFIED, buf, 4);
+                if(*buf == 0x300) {
+                    // seems to be the NAND read command, read the page + bank and instruct the flash device
+                    buf = malloc(4);
+                    address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x44, MEMTXATTRS_UNSPECIFIED, buf, 4);
+                    uint32_t bank = *buf;
+
+                    buf = malloc(4);
+                    address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x244, MEMTXATTRS_UNSPECIFIED, buf, 4);
+                    uint32_t page = *buf;
+                    page = ((page>>24)&0xff) | // move byte 3 to byte 0
+                           ((page<<8)&0xff0000) | // move byte 1 to byte 2
+                           ((page>>8)&0xff00) | // move byte 2 to byte 1
+                           ((page<<24)&0xff000000); // byte 0 to byte 3
+
+                    // set the bank, page, and operation.
+                    set_bank(s->nand_state, bank);
+                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMDNUM, 0x800 - 1, MO_32, MEMTXATTRS_UNSPECIFIED);
+                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMADDR0, page << 16, MO_32, MEMTXATTRS_UNSPECIFIED);
+                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMADDR1, (page >> 16) & 0xFF, MO_32, MEMTXATTRS_UNSPECIFIED);
+                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_CMD, NAND_CMD_READ, MO_32, MEMTXATTRS_UNSPECIFIED);
+
+                    // write the spare of the page to the 3rd data section
+                    nand_set_buffered_page(s->nand_state, page);
+                    address_space_rw(&s->downstream_as, s->data3_sec_addr, MEMTXATTRS_UNSPECIFIED, (uint8_t *)s->nand_state->page_spare_buffer, NAND_BYTES_PER_SPARE, 1);
+                }
+
                 qemu_irq_raise(s->irq);
             }
             if((value & 0x2) == 0) {

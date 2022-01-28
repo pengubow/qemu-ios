@@ -27,7 +27,7 @@
 #define SYSIC_MEM_BASE 0x39A00000
 #define VIC0_MEM_BASE 0x38E00000
 #define VIC1_MEM_BASE 0x38E01000
-#define UNKNOWN1_MEM_BASE 0x38E02000
+#define EDGEIC_MEM_BASE 0x38E02000
 #define IIS0_MEM_BASE 0x3D400000
 #define IIS1_MEM_BASE 0x3CD00000
 #define IIS2_MEM_BASE 0x3CA00000
@@ -566,7 +566,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     //     address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     //  }
 
-    allocate_ram(sysmem, "unknown1", UNKNOWN1_MEM_BASE, 0x1000);
+    allocate_ram(sysmem, "edgeic", EDGEIC_MEM_BASE, 0x1000);
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
 

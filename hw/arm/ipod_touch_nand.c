@@ -36,7 +36,7 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
 
         s->buffered_page = page;
         s->buffered_bank = bank;
-        printf("Buffered bank: %d, page: %d\n", s->buffered_bank, s->buffered_page);
+        //printf("Buffered bank: %d, page: %d\n", s->buffered_bank, s->buffered_page);
     }
 }
 

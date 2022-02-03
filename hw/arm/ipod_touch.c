@@ -63,6 +63,9 @@
 #define KERNELCACHE_BASE 0x9000000
 #define SDIO_MEM_BASE 0x38d00000
 #define FRAMEBUFFER_MEM_BASE 0xfe00000
+#define TVOUT1_MEM_BASE 0x39100000
+#define TVOUT2_MEM_BASE 0x39200000
+#define TVOUT3_MEM_BASE 0x39300000
 
 static void allocate_ram(MemoryRegion *top, const char *name, uint32_t addr, uint32_t size)
 {
@@ -139,7 +142,9 @@ static void s5l8900_st_tick(void *opaque)
         qemu_irq_raise(s->irq);
 
         /* schedule next interrupt */
-        s5l8900_st_set_timer(s);
+        if(!(s->status & TIMER_STATE_MANUALUPDATE)) {
+            s5l8900_st_set_timer(s);
+        }
     } else {
         s->next_planned_tick = 0;
         s->last_tick = 0;
@@ -149,6 +154,7 @@ static void s5l8900_st_tick(void *opaque)
 
 static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
+    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, value, addr);
     s5l8900_timer_s *s = (struct s5l8900_timer_s *) opaque;
 
     switch(addr){
@@ -165,11 +171,11 @@ static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t value, unsi
             s->config = value;
             break;
         case TIMER_4 + TIMER_STATE:
-            if ((value & TIMER_STATE_START) > (s->status & TIMER_STATE_START)) {
+            if (value & TIMER_STATE_START) {
                 s->base_time = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
                 s5l8900_st_update(s);
                 s5l8900_st_set_timer(s);
-            } else if ((value & TIMER_STATE_START) < (s->status & TIMER_STATE_START)) {
+            } else if (value == TIMER_STATE_STOP) {
                 timer_del(s->st_timer);
             }
             s->status = value;
@@ -187,6 +193,7 @@ static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t value, unsi
 
 static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
 {
+    //fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
     s5l8900_timer_s *s = (struct s5l8900_timer_s *) opaque;
     uint64_t elapsed_ns, ticks;
 
@@ -580,6 +587,10 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "sdio", SDIO_MEM_BASE, 4096);
+
+    allocate_ram(sysmem, "tvout1", TVOUT1_MEM_BASE, 4096);
+    allocate_ram(sysmem, "tvout2", TVOUT2_MEM_BASE, 4096);
+    allocate_ram(sysmem, "tvout3", TVOUT3_MEM_BASE, 4096);
 
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
 

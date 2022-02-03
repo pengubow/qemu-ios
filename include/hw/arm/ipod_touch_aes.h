@@ -65,7 +65,7 @@ static uint64_t s5l8900_aes_read(void *opaque, hwaddr offset, unsigned size)
 {
     struct S5L8900AESState *aesop = (struct S5L8900AESState *)opaque;
 
-    fprintf(stderr, "%s: offset 0x%08x\n", __FUNCTION__, offset);
+    //fprintf(stderr, "%s: offset 0x%08x\n", __FUNCTION__, offset);
 
     switch(offset) {
         case AES_STATUS:
@@ -86,7 +86,7 @@ static void s5l8900_aes_write(void *opaque, hwaddr offset, uint64_t value, unsig
     uint8_t inbuf[0x1000];
     uint8_t *buf;
 
-    fprintf(stderr, "%s: offset 0x%08x value 0x%08x\n", __FUNCTION__, offset, value);
+    //fprintf(stderr, "%s: offset 0x%08x value 0x%08x\n", __FUNCTION__, offset, value);
 
     switch(offset) {
         case AES_GO:

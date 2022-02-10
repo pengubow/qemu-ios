@@ -58,34 +58,95 @@ static void ipod_touch_adm_write(void *opaque, hwaddr offset, uint64_t value, un
         case ADM_CTRL2:
             if(value == 0x2) {
                 // read the command and initialize the right device
+                uint32_t page, bank;
                 uint32_t *buf = malloc(4);
                 address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x24, MEMTXATTRS_UNSPECIFIED, buf, 4);
-                if(*buf == 0x300) {
-                    // seems to be the NAND read command, read the page + bank and instruct the flash device
-                    buf = malloc(4);
-                    address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x44, MEMTXATTRS_UNSPECIFIED, buf, 4);
-                    uint32_t bank = *buf;
+                int cmd = *buf;
+                //printf("Setting command: %d\n", cmd);
+                switch(cmd) {
+                    case 0x200:
+                        // read multiple pages
+                        s->nand_state->reading_multiple_pages = true;
+                        for(int i = 0; i < 8; i++) {
+                            // buf = malloc(4);
+                            address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x244, MEMTXATTRS_UNSPECIFIED, buf, 4);
+                            page = *buf;
+                            page = ((page>>24)&0xff) | // move byte 3 to byte 0
+                                   ((page<<8)&0xff0000) | // move byte 1 to byte 2
+                                   ((page>>8)&0xff00) | // move byte 2 to byte 1
+                                   ((page<<24)&0xff000000); // byte 0 to byte 3
+                            //printf("PAGE: %d\n", page);
+                            s->nand_state->pages_to_read[i] = page;
+                        }
 
-                    buf = malloc(4);
-                    address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x244, MEMTXATTRS_UNSPECIFIED, buf, 4);
-                    uint32_t page = *buf;
-                    page = ((page>>24)&0xff) | // move byte 3 to byte 0
-                           ((page<<8)&0xff0000) | // move byte 1 to byte 2
-                           ((page>>8)&0xff00) | // move byte 2 to byte 1
-                           ((page<<24)&0xff000000); // byte 0 to byte 3
+                        s->nand_state->fmdnum = (8 * 0x800);
+                        s->nand_state->cur_bank_reading = -1;
 
-                    // set the bank, page, and operation.
-                    set_bank(s->nand_state, bank);
-                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMDNUM, 0x800 - 1, MO_32, MEMTXATTRS_UNSPECIFIED);
-                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMADDR0, page << 16, MO_32, MEMTXATTRS_UNSPECIFIED);
-                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMADDR1, (page >> 16) & 0xFF, MO_32, MEMTXATTRS_UNSPECIFIED);
-                    memory_region_dispatch_write(&s->nand_state->iomem, NAND_CMD, NAND_CMD_READ, MO_32, MEMTXATTRS_UNSPECIFIED);
+                        for(int i = 0; i < 8; i++) {
+                            uint8_t *sbuf = malloc(0xC);
+                            sbuf[10] = 0xFF;
+                            address_space_rw(&s->downstream_as, s->data3_sec_addr + i * 0xC, MEMTXATTRS_UNSPECIFIED, sbuf, 0xC, 1);
+                        }
+                        
+                        break;
+                    case 0x300:
+                        // seems to be the NAND read command, read the page + bank and instruct the flash device
+                        s->nand_state->reading_multiple_pages = false;
+                        buf = malloc(1);
+                        address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x44, MEMTXATTRS_UNSPECIFIED, buf, 1);
+                        bank = *buf;
 
-                    // write the spare of the page to the 3rd data section
-                    nand_set_buffered_page(s->nand_state, page);
-                    address_space_rw(&s->downstream_as, s->data3_sec_addr, MEMTXATTRS_UNSPECIFIED, (uint8_t *)s->nand_state->page_spare_buffer, NAND_BYTES_PER_SPARE, 1);
+                        buf = malloc(4);
+                        address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x244, MEMTXATTRS_UNSPECIFIED, buf, 4);
+                        page = *buf;
+                        page = ((page>>24)&0xff) | // move byte 3 to byte 0
+                               ((page<<8)&0xff0000) | // move byte 1 to byte 2
+                               ((page>>8)&0xff00) | // move byte 2 to byte 1
+                               ((page<<24)&0xff000000); // byte 0 to byte 3
+
+                        // set the bank, page, and operation.
+                        //printf("Activating bank: %d, page: %d\n", bank, page);
+                        set_bank(s->nand_state, bank);
+                        memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMDNUM, 0x800 - 1, MO_32, MEMTXATTRS_UNSPECIFIED);
+                        memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMADDR0, page << 16, MO_32, MEMTXATTRS_UNSPECIFIED);
+                        memory_region_dispatch_write(&s->nand_state->iomem, NAND_FMADDR1, (page >> 16) & 0xFF, MO_32, MEMTXATTRS_UNSPECIFIED);
+                        memory_region_dispatch_write(&s->nand_state->iomem, NAND_CMD, NAND_CMD_READ, MO_32, MEMTXATTRS_UNSPECIFIED);
+
+                        // write the spare of the page to the 3rd data section
+                        nand_set_buffered_page(s->nand_state, page);
+                        address_space_rw(&s->downstream_as, s->data3_sec_addr, MEMTXATTRS_UNSPECIFIED, (uint8_t *)s->nand_state->page_spare_buffer, NAND_BYTES_PER_SPARE, 1);
+
+                        // for(int i = 0; i < 8; i++) {
+                        //     uint8_t *sbuf = malloc(0xC);
+                        //     sbuf[10] = 0xFF;
+                        //     address_space_rw(&s->downstream_as, s->data3_sec_addr + i * 0xC, MEMTXATTRS_UNSPECIFIED, sbuf, 0xC, 1);
+                        // }
+                        break;
+                    case 0x500:
+                        // writing a page
+                        buf = malloc(1);
+                        address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x44, MEMTXATTRS_UNSPECIFIED, buf, 1);
+                        bank = *buf;
+
+                        buf = malloc(4);
+                        address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x244, MEMTXATTRS_UNSPECIFIED, buf, 4);
+                        page = *buf;
+                        page = ((page>>24)&0xff) | // move byte 3 to byte 0
+                               ((page<<8)&0xff0000) | // move byte 1 to byte 2
+                               ((page>>8)&0xff00) | // move byte 2 to byte 1
+                               ((page<<24)&0xff000000); // byte 0 to byte 3
+
+                        // set the bank, page, and operation.
+                        //printf("Activating bank for writing: %d, page: %d\n", bank, page);
+                        set_bank(s->nand_state, bank);
+                        nand_set_buffered_page(s->nand_state, page);
+                        s->nand_state->fmdnum = NAND_BYTES_PER_PAGE;
+                        s->nand_state->is_writing = true;
+                        break;
+                    default:
+                        printf("Unrecognized ADM command: %d\n", cmd);
+                        break;
                 }
-
                 qemu_irq_raise(s->irq);
             }
             if((value & 0x2) == 0) {

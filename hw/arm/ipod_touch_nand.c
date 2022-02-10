@@ -10,6 +10,16 @@ static int get_bank(ITNandState *s) {
     return -1;
 }
 
+static void set_bank(ITNandState *s, uint32_t activate_bank) {
+    for(int bank = 0; bank < 8; bank++) {
+        // clear bit, toggle if it is active
+        s->fmctrl0 &= ~(1 << (bank + 1));
+        if(bank == activate_bank) {
+            s->fmctrl0 ^= 1 << (bank + 1);
+        }
+    }
+}
+
 void nand_set_buffered_page(ITNandState *s, uint32_t page) {
     uint32_t bank = get_bank(s);
     if(bank == -1) {
@@ -43,7 +53,9 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
 static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
-    //fprintf(stderr, "%s: reading from 0x%08x\n", __func__, addr);
+    if(s->reading_multiple_pages) {
+        //fprintf(stderr, "%s: reading from 0x%08x\n", __func__, addr);
+    }
 
     switch (addr) {
         case NAND_FMCTRL0:
@@ -56,18 +68,34 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
                 return (1 << 6);
             }
             else {
-                uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
-                nand_set_buffered_page(s, page);
-
                 uint32_t read_val = 0;
-                if(s->reading_spare) {
-                    read_val = ((uint32_t *)s->page_spare_buffer)[(NAND_BYTES_PER_SPARE - s->fmdnum - 1) / 4];
-                } else {
-                    read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum - 1) / 4];
-                } 
+                if(s->reading_multiple_pages) {
+                    // which bank are we at?
+                    if(s->fmdnum % 0x800 == 0) {
+                        s->cur_bank_reading += 1;
+                        //printf("WILL TURN TO BANK %d (cnt: %d)\n", s->cur_bank_reading, s->fmdnum);
+                        set_bank(s, s->cur_bank_reading);
+                    }
 
+                    // compute the offset in the page
+                    uint32_t page_offset = s->fmdnum % 0x800;
+                    if(page_offset == 0) { page_offset = 0x800; }
+                    nand_set_buffered_page(s, s->pages_to_read[s->cur_bank_reading]);
+                    read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - page_offset) / 4];
+                    //printf("FMDNUM: %d, offset: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - page_offset) / 4);
+                    //printf("Page offset: %d, bytes: 0x%08x\n", page_offset, read_val);
+                }
+                else {
+                    uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
+                    nand_set_buffered_page(s, page);
+
+                    if(s->reading_spare) {
+                        read_val = ((uint32_t *)s->page_spare_buffer)[(NAND_BYTES_PER_SPARE - s->fmdnum - 1) / 4];
+                    } else {
+                        read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum - 1) / 4];
+                    }
+                }
                 s->fmdnum -= 4;
-
                 return read_val;
             }
 
@@ -84,7 +112,10 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
-    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    if(s->reading_multiple_pages) {
+        //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    }
+    
 
     switch(addr) {
         case NAND_FMCTRL0:
@@ -112,6 +143,29 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
                 s->reading_spare = 0;
             }
             s->fmdnum = val;
+            break;
+        case NAND_FMFIFO:
+            if(!s->is_writing) {
+                //printf("%s: NAND_FMFIFO writing while not in writing mode!\n", __func__);
+                return;
+            }
+
+            //printf("Setting offset %d: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - s->fmdnum) / 4);
+            ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum) / 4] = val;
+            s->fmdnum -= 4;
+
+            if(s->fmdnum == 0) {
+                // we're done!
+                s->is_writing = false;
+
+                // // flush the page buffer to the disk
+                // char filename[200];
+                // sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", s->buffered_bank, s->buffered_page);
+                // FILE *f = fopen(filename, "rb");
+                // if (f == NULL) { hw_error("Unable to read file!"); }
+                // fwrite(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
+                // fclose(f);
+            }
             break;
         case NAND_RSCTRL:
             s->rsctrl = val;

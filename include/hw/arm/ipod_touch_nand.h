@@ -49,6 +49,10 @@ typedef struct ITNandState {
     uint8_t *page_spare_buffer;
     uint32_t buffered_bank;
     uint32_t buffered_page;
+    bool reading_multiple_pages;
+    uint32_t cur_bank_reading;
+    uint32_t pages_to_read[8]; // used when in multiple page read mode
+    bool is_writing;
 } ITNandState;
 
 void nand_set_buffered_page(ITNandState *s, uint32_t page);

@@ -83,7 +83,7 @@ static void pl080_update(PL080State *s)
     bool tclevel = (s->tc_int & s->tc_mask);
     bool errlevel = (s->err_int & s->err_mask);
 
-    //printf("Setting irq: %d\n", errlevel || tclevel);
+    //printf("(DMA) Setting irq: %d\n", errlevel || tclevel);
 
     qemu_set_irq(s->interr, errlevel);
     qemu_set_irq(s->inttc, tclevel);
@@ -144,8 +144,8 @@ again:
             case 0:
                 break;
             case 1:
-                if ((req & (1u << dest_id)) == 0)
-                    size = 0;
+                // if ((req & (1u << dest_id)) == 0)
+                //     size = 0;
                 break;
             case 2:
                 // if ((req & (1u << src_id)) == 0)
@@ -157,8 +157,9 @@ again:
                     size = 0;
                 break;
             }
-            if (!size)
+            if (!size) {
                 continue;
+            }
 
             /* Transfer one element.  */
             /* ??? Should transfer multiple elements for a burst request.  */
@@ -181,6 +182,7 @@ again:
                     ch->dest += swidth;
             }
 
+            //printf("Transfer size: %d, destination: 0x%08x\n", size, ch->dest);
             size--;
             ch->ctrl = (ch->ctrl & 0xfffff000) | size;
             if (size == 0) {
@@ -301,9 +303,11 @@ static void pl080_write(void *opaque, hwaddr offset,
             goto bad_offset;
         switch ((offset >> 2) & 7) {
         case 0: /* SrcAddr */
+            //printf("%s: setting source address of channel %d to 0x%08x\n", __func__, i, value);
             s->chan[i].src = value;
             break;
         case 1: /* DestAddr */
+            //printf("%s: setting destination address of channel %d to 0x%08x\n", __func__, i, value);
             s->chan[i].dest = value;
             break;
         case 2: /* LLI */
@@ -313,6 +317,7 @@ static void pl080_write(void *opaque, hwaddr offset,
             s->chan[i].ctrl = value;
             break;
         case 4: /* Configuration */
+            //printf("%s: setting configuration of channel %d to 0x%08x\n", __func__, i, value);
             s->chan[i].conf = value;
             pl080_run(s);
             break;

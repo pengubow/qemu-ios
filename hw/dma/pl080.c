@@ -314,6 +314,7 @@ static void pl080_write(void *opaque, hwaddr offset,
             s->chan[i].lli = value;
             break;
         case 3: /* Control */
+            //printf("%s: setting control of channel %d to 0x%08x (transfer size: %d)\n", __func__, i, value, value & 0xfff);
             s->chan[i].ctrl = value;
             break;
         case 4: /* Configuration */

@@ -51,7 +51,8 @@ typedef struct ITNandState {
     uint32_t buffered_page;
     bool reading_multiple_pages;
     uint32_t cur_bank_reading;
-    uint32_t pages_to_read[8]; // used when in multiple page read mode
+    uint32_t banks_to_read[16]; // used when in multiple page read mode
+    uint32_t pages_to_read[16]; // used when in multiple page read mode
     bool is_writing;
 } ITNandState;
 

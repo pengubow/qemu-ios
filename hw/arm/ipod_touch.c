@@ -577,11 +577,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
 
-    allocate_ram(sysmem, "uart1", UART1_MEM_BASE, align_64k_high(0x4000));
-    allocate_ram(sysmem, "uart2", UART2_MEM_BASE, align_64k_high(0x4000));
-    allocate_ram(sysmem, "uart3", UART3_MEM_BASE, align_64k_high(0x4000));
-    allocate_ram(sysmem, "uart4", UART4_MEM_BASE, align_64k_high(0x4000));
-
     allocate_ram(sysmem, "iis0", IIS0_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "iis1", IIS1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
@@ -673,6 +668,30 @@ static void ipod_touch_machine_init(MachineState *machine)
     dev = exynos4210_uart_create(UART0_MEM_BASE, 256, 0, serial_hd(0), nms->irq[0][24]);
     if (!dev) {
         printf("Failed to create uart0 device!\n");
+        abort();
+    }
+
+    dev = exynos4210_uart_create(UART1_MEM_BASE, 256, 1, serial_hd(1), nms->irq[0][25]);
+    if (!dev) {
+        printf("Failed to create uart1 device!\n");
+        abort();
+    }
+
+    dev = exynos4210_uart_create(UART2_MEM_BASE, 256, 2, serial_hd(2), nms->irq[0][26]);
+    if (!dev) {
+        printf("Failed to create uart2 device!\n");
+        abort();
+    }
+
+    dev = exynos4210_uart_create(UART3_MEM_BASE, 256, 3, serial_hd(3), nms->irq[0][27]);
+    if (!dev) {
+        printf("Failed to create uart3 device!\n");
+        abort();
+    }
+
+    dev = exynos4210_uart_create(UART4_MEM_BASE, 256, 4, serial_hd(4), nms->irq[0][28]);
+    if (!dev) {
+        printf("Failed to create uart4 device!\n");
         abort();
     }
 

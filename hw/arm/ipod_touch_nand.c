@@ -35,6 +35,7 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
             // page storage does not exist - initialize an empty buffer
             s->page_buffer = calloc(NAND_BYTES_PER_PAGE, sizeof(char));
             s->page_spare_buffer = calloc(NAND_BYTES_PER_SPARE, sizeof(char));
+            s->page_spare_buffer[0xA] = 0xFF; // make sure we add the FTL mark to an empty page
         }
         else {
             FILE *f = fopen(filename, "rb");
@@ -46,7 +47,7 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
 
         s->buffered_page = page;
         s->buffered_bank = bank;
-        //printf("Buffered bank: %d, page: %d\n", s->buffered_bank, s->buffered_page);
+        // printf("Buffered bank: %d, page: %d\n", s->buffered_bank, s->buffered_page);
     }
 }
 
@@ -74,7 +75,7 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
                     if(s->fmdnum % 0x800 == 0) {
                         s->cur_bank_reading += 1;
                         //printf("WILL TURN TO BANK %d (cnt: %d)\n", s->cur_bank_reading, s->fmdnum);
-                        set_bank(s, s->cur_bank_reading);
+                        set_bank(s, s->banks_to_read[s->cur_bank_reading]);
                     }
 
                     // compute the offset in the page
@@ -146,11 +147,11 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
             break;
         case NAND_FMFIFO:
             if(!s->is_writing) {
-                //printf("%s: NAND_FMFIFO writing while not in writing mode!\n", __func__);
+                // printf("%s: NAND_FMFIFO writing while not in writing mode!\n", __func__);
                 return;
             }
 
-            //printf("Setting offset %d: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - s->fmdnum) / 4);
+            // printf("Setting offset %d: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - s->fmdnum) / 4);
             ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum) / 4] = val;
             s->fmdnum -= 4;
 
@@ -158,13 +159,14 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
                 // we're done!
                 s->is_writing = false;
 
-                // // flush the page buffer to the disk
-                // char filename[200];
-                // sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", s->buffered_bank, s->buffered_page);
-                // FILE *f = fopen(filename, "rb");
-                // if (f == NULL) { hw_error("Unable to read file!"); }
-                // fwrite(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-                // fclose(f);
+                // flush the page buffer to the disk
+                printf("Flushing page %d, bank %d", s->buffered_page, s->buffered_bank);
+                char filename[200];
+                sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", s->buffered_bank, s->buffered_page);
+                FILE *f = fopen(filename, "rb");
+                if (f == NULL) { hw_error("Unable to read file!"); }
+                fwrite(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
+                fclose(f);
             }
             break;
         case NAND_RSCTRL:

@@ -17,6 +17,7 @@
 #include "hw/arm/ipod_touch_adm.h"
 #include "hw/arm/ipod_touch_sysic.h"
 #include "hw/arm/ipod_touch_chipid.h"
+#include "hw/arm/ipod_touch_tvout.h"
 #include "hw/i2c/ipod_touch_i2c.h"
 #include "cpu.h"
 
@@ -70,6 +71,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(s5l8900_lcd_state, IPOD_TOUCH_LCD)
 #define S5L8900_ADM_IRQ 0x25
 
 #define S5L8900_NAND_ECC_IRQ 0x2B
+
+#define S5L8900_TVOUT_SDO_IRQ 0x1E
+#define S5L8900_TVOUT_MIXER_IRQ 0x26
 
 typedef struct {
     MachineClass parent;
@@ -151,6 +155,9 @@ typedef struct {
 	IPodTouchI2CState *i2c1_state;
 	IPodTouchADMState *adm_state;
 	IPodTouchChipIDState *chipid_state;
+	IPodTouchTVOutState *tvout1_state;
+	IPodTouchTVOutState *tvout2_state;
+	IPodTouchTVOutState *tvout3_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

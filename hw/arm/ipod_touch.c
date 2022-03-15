@@ -67,6 +67,24 @@
 #define TVOUT2_MEM_BASE 0x39200000
 #define TVOUT3_MEM_BASE 0x39300000
 
+#define TVOUT_WORKAROUND_MEM_BASE 0x8a25960  // workaround for TV Out, to make sure that it can be correctly deallocated without reverse engineering the entire TVOut protocol
+
+static uint64_t tvout_workaround_read(void *opaque, hwaddr addr, unsigned size)
+{
+    return 0;
+}
+
+static void tvout_workaround_write(void *opaque, hwaddr addr, uint64_t value, unsigned size)
+{
+
+}
+
+static const MemoryRegionOps tvout_workaround_ops = {
+    .read = tvout_workaround_read,
+    .write = tvout_workaround_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
 static void allocate_ram(MemoryRegion *top, const char *name, uint32_t addr, uint32_t size)
 {
         MemoryRegion *sec = g_new(MemoryRegion, 1);
@@ -583,10 +601,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     allocate_ram(sysmem, "sdio", SDIO_MEM_BASE, 4096);
 
-    allocate_ram(sysmem, "tvout1", TVOUT1_MEM_BASE, 4096);
-    allocate_ram(sysmem, "tvout2", TVOUT2_MEM_BASE, 4096);
-    allocate_ram(sysmem, "tvout3", TVOUT3_MEM_BASE, 4096);
-
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
 
     // setup 1MB NOR
@@ -840,6 +854,32 @@ static void ipod_touch_machine_init(MachineState *machine)
     IPodTouchChipIDState *chipid_state = IPOD_TOUCH_CHIPID(dev);
     nms->chipid_state = chipid_state;
     memory_region_add_subregion(sysmem, CHIPID_MEM_BASE, &chipid_state->iomem);
+
+    // init the TVOut instances
+    dev = qdev_new("ipodtouch.tvout");
+    IPodTouchTVOutState *tvout_state = IPOD_TOUCH_TVOUT(dev);
+    tvout_state->index = 1;
+    nms->tvout1_state = tvout_state;
+    memory_region_add_subregion(sysmem, TVOUT1_MEM_BASE, &tvout_state->iomem);
+
+    dev = qdev_new("ipodtouch.tvout");
+    tvout_state = IPOD_TOUCH_TVOUT(dev);
+    tvout_state->index = 2;
+    nms->tvout2_state = tvout_state;
+    memory_region_add_subregion(sysmem, TVOUT2_MEM_BASE, &tvout_state->iomem);
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_TVOUT_SDO_IRQ));
+
+    dev = qdev_new("ipodtouch.tvout");
+    tvout_state = IPOD_TOUCH_TVOUT(dev);
+    tvout_state->index = 3;
+    nms->tvout3_state = tvout_state;
+    memory_region_add_subregion(sysmem, TVOUT3_MEM_BASE, &tvout_state->iomem);
+
+    // setup workaround for TVOut
+    iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, OBJECT(nms), &tvout_workaround_ops, NULL, "tvoutworkaround", 0x4);
+    memory_region_add_subregion(sysmem, TVOUT_WORKAROUND_MEM_BASE, iomem);
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
 }

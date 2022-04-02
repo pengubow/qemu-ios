@@ -23,7 +23,7 @@ static void set_bank(ITNandState *s, uint32_t activate_bank) {
 void nand_set_buffered_page(ITNandState *s, uint32_t page) {
     uint32_t bank = get_bank(s);
     if(bank == -1) {
-        hw_error("Active bank not set while nand_read is called!");
+        hw_error("Active bank not set while nand_read with page %d is called (reading multiple pages: %d)!", page, s->reading_multiple_pages);
     }
 
     if(bank != s->buffered_bank || page != s->buffered_page) {
@@ -160,7 +160,7 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
                 s->is_writing = false;
 
                 // flush the page buffer to the disk
-                printf("Flushing page %d, bank %d", s->buffered_page, s->buffered_bank);
+                //printf("Flushing page %d, bank %d\n", s->buffered_page, s->buffered_bank);
                 char filename[200];
                 sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", s->buffered_bank, s->buffered_page);
                 FILE *f = fopen(filename, "rb");

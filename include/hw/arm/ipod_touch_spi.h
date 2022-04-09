@@ -15,7 +15,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(S5L8900SPIState, S5L8900SPI)
 #define SPI_CONTROL 0
 #define SPI_SETUP 0x4 
 #define SPI_STATUS 0x8
-#define SPI_PIN 0xc 
+#define SPI_PIN 0xc
 #define SPI_TXDATA 0x10
 #define SPI_RXDATA 0x20
 #define SPI_CLKDIV 0x30
@@ -27,14 +27,15 @@ typedef struct S5L8900SPIState {
     SysBusDevice busdev;
     MemoryRegion iomem;
 
-	uint32_t cmd;
 	uint32_t base;
 	uint32_t ctrl;
 	uint32_t setup;
 	uint32_t status;
 	uint32_t pin;
-	uint32_t tx_data;
-	uint32_t rx_data;
+	uint8_t tx_buffer[8];
+	uint8_t tx_buffer_ind;
+	uint8_t rx_buffer[8];
+	uint8_t rx_buffer_ind;
 	uint32_t clkdiv;
 	uint32_t cnt;
 	uint32_t idd;

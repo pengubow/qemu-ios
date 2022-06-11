@@ -41,11 +41,6 @@ static uint64_t swapLong(void *X) {
 
 static void flush_hw_buffer(S5L8900SHA1State *s) {
     // Flush the hardware buffer to the state buffer and clear the buffer.
-    printf("Buffer: ");
-    for(int i = 0; i < 16; i++) {
-        printf("0x%08x ", s->hw_buffer[i]);
-    }
-    printf("\n");
     memcpy(s->buffer + s->buffer_ind, (uint8_t *)s->hw_buffer, 0x40);
     memset(s->hw_buffer, 0, 0x40);
     s->hw_buffer_dirty = false;
@@ -62,7 +57,7 @@ static uint64_t s5l8900_sha1_read(void *opaque, hwaddr offset, unsigned size)
 {
 	S5L8900SHA1State *s = (S5L8900SHA1State *)opaque;
 
-    fprintf(stderr, "%s: offset 0x%08x\n", __FUNCTION__, offset);
+    //fprintf(stderr, "%s: offset 0x%08x\n", __FUNCTION__, offset);
 
 	switch(offset) {
 		case SHA_CONFIG:
@@ -80,10 +75,7 @@ static uint64_t s5l8900_sha1_read(void *opaque, hwaddr offset, unsigned size)
 			//fprintf(stderr, "Hash out %08x\n",  *(uint32_t *)&s->hashout[offset - 0x20]);
             if(!s->hash_computed) {
                 // lazy compute the final hash by inspecting the last eight bytes of the buffer, which contains the length of the input data.
-                printf("Buffer ind: %d\n", s->buffer_ind);
                 uint64_t data_length = swapLong(((uint64_t *)s->buffer)[s->buffer_ind / 8 - 1]) / 8;
-                printf("Buffer length: %d\n", s->buffer_ind);
-                printf("Data length: %ld\n", data_length);
 
                 SHA_CTX ctx;
                 SHA1_Init(&ctx);
@@ -102,7 +94,7 @@ static void s5l8900_sha1_write(void *opaque, hwaddr offset, uint64_t value, unsi
 {
     S5L8900SHA1State *s = (S5L8900SHA1State *)opaque;
 
-    fprintf(stderr, "%s: offset 0x%08x value 0x%08x\n", __FUNCTION__, offset, value);
+    //fprintf(stderr, "%s: offset 0x%08x value 0x%08x\n", __FUNCTION__, offset, value);
 
 	switch(offset) {
 		case SHA_CONFIG:

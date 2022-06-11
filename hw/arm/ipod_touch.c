@@ -460,6 +460,8 @@ static void draw_line32_32(void *opaque, uint8_t *d, const uint8_t *s, int width
 
 static void lcd_refresh(void *opaque)
 {
+    //fprintf(stderr, "%s: refreshing LCD screen\n", __func__);
+
     s5l8900_lcd_state *lcd = (s5l8900_lcd_state *) opaque;
     DisplaySurface *surface = qemu_console_surface(lcd->con);
     drawfn draw_line;

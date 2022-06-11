@@ -42,7 +42,7 @@ static uint64_t s5l8900_spi_read(void *opaque, hwaddr offset, unsigned size)
     S5L8900SPIState *s = (S5L8900SPIState *)opaque;
     uint8_t val;
 
-	fprintf(stderr, "%s: base 0x%08x offset 0x%08x\n", __func__, s->base, offset);
+	//fprintf(stderr, "%s: base 0x%08x offset 0x%08x\n", __func__, s->base, offset);
 
     switch (offset) {
         case SPI_CONTROL:
@@ -74,7 +74,7 @@ static void s5l8900_spi_write(void *opaque, hwaddr offset, uint64_t val, unsigne
 {
     S5L8900SPIState *s = (S5L8900SPIState *)opaque;
 
-    fprintf(stderr, "%s: base 0x%08x offset 0x%08x value 0x%08x\n", __func__, s->base, offset, val);
+    //fprintf(stderr, "%s: base 0x%08x offset 0x%08x value 0x%08x\n", __func__, s->base, offset, val);
 
     switch (offset) {
     case SPI_CONTROL:
@@ -85,7 +85,7 @@ static void s5l8900_spi_write(void *opaque, hwaddr offset, uint64_t val, unsigne
 
                 // process the tx queue
                 s5l8900_spi_process_tx_buffer(s);
-                printf("RAISE IRQ\n");
+                //printf("RAISE IRQ\n");
 	    		qemu_irq_raise(s->irq);
 		} else {
             s->ctrl = val;
@@ -111,13 +111,13 @@ static void s5l8900_spi_write(void *opaque, hwaddr offset, uint64_t val, unsigne
     case SPI_PIN:
         s->pin = val;
         break;
-    case SPI_TXDATA:
+    case SPI_TXDATA ... SPI_TXDATA + 3:
         s->tx_buffer[s->tx_buffer_ind] = val;
         s->tx_buffer_ind += 1;
         if(s->tx_buffer_ind == 8) {
             s5l8900_spi_process_tx_buffer(s);
-            printf("RAISE IRQ\n");
-            qemu_irq_raise(s->irq);
+            //printf("RAISE IRQ\n");
+            //qemu_irq_raise(s->irq);
         }
         break;
     case SPI_RXDATA:

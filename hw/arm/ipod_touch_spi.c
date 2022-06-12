@@ -6,134 +6,223 @@
 
 #include "hw/arm/ipod_touch_spi.h"
 
-s5l8900_spi_process_tx_buffer(S5L8900SPIState *s)
+static int apple_spi_word_size(S5L8900SPIState *s)
 {
-    if(s->base == 1) { // LCD 1
-        uint8_t command = s->tx_buffer[0];
-        switch(command) {
-            case 0x95:
-                s->rx_buffer[0] = 0x1;
-                break;
-            case 0xDA:
-                s->rx_buffer[0] = 0x71;
-                break;
-            case 0xDB:
-                s->rx_buffer[0] = 0xC2;
-                break;
-            case 0xDC:
-                s->rx_buffer[0] = 0x0;
-                break;
-            default:
-                break;
-        }
-    }
-    else if(s->base == 2) { // Multitouch
-        s->rx_buffer[0] = 0x1A;
-        s->rx_buffer[1] = 0xA1;
-        s->rx_buffer[2] = 0x1A;
-        s->rx_buffer[3] = 0xA1;
-    }
-
-    s->status |= (0x8 << 8);
-}
-
-static uint64_t s5l8900_spi_read(void *opaque, hwaddr offset, unsigned size)
-{
-    S5L8900SPIState *s = (S5L8900SPIState *)opaque;
-    uint8_t val;
-
-	//fprintf(stderr, "%s: base 0x%08x offset 0x%08x\n", __func__, s->base, offset);
-
-    switch (offset) {
-        case SPI_CONTROL:
-    		return s->ctrl;
-        case SPI_SETUP:
-            return s->setup;
-        case SPI_STATUS:
-            return s->status;
-        case SPI_PIN:
-            return s->pin;
-        case SPI_TXDATA:
-            return 0;
-        case SPI_RXDATA:
-            val = s->rx_buffer[s->rx_buffer_ind];
-            s->rx_buffer_ind++;
-            return val;
-        case SPI_CLKDIV:
-            return s->clkdiv;
-        case SPI_CNT:
-            return s->cnt;
-        case SPI_IDD:
-            return s->idd;
-        default:
-            hw_error("s5l8900_spi: bad read offset 0x" TARGET_FMT_plx "\n", offset);
-    }
-}
-
-static void s5l8900_spi_write(void *opaque, hwaddr offset, uint64_t val, unsigned size)
-{
-    S5L8900SPIState *s = (S5L8900SPIState *)opaque;
-
-    //fprintf(stderr, "%s: base 0x%08x offset 0x%08x value 0x%08x\n", __func__, s->base, offset, val);
-
-    switch (offset) {
-    case SPI_CONTROL:
-		if(val == 0x1) {
-                // this is an indicator that the request is done. Now, we raise an interrupt and the software checks if this last bit is set.
-                // since the request completes, we do not toggle the bit.
-				s->status |= 0xff2;
-
-                // process the tx queue
-                s5l8900_spi_process_tx_buffer(s);
-                //printf("RAISE IRQ\n");
-	    		qemu_irq_raise(s->irq);
-		} else {
-            s->ctrl = val;
-        }
-
-        if(val & (1 << 2)) { // flush TX queue
-            calloc(s->tx_buffer, 0x8);
-            s->tx_buffer_ind = 0;
-        }
-        if(val & (1 << 3)) { // flush RX queue
-            calloc(s->rx_buffer, 0x8);
-            s->rx_buffer_ind = 0;
-        }
-
-        break;
-    case SPI_SETUP:
-        s->setup = val;
-        break;
-    case SPI_STATUS:
-		qemu_irq_lower(s->irq);
-        s->status = (0x8 << 8);
-        break;
-    case SPI_PIN:
-        s->pin = val;
-        break;
-    case SPI_TXDATA ... SPI_TXDATA + 3:
-        s->tx_buffer[s->tx_buffer_ind] = val;
-        s->tx_buffer_ind += 1;
-        if(s->tx_buffer_ind == 8) {
-            s5l8900_spi_process_tx_buffer(s);
-            //printf("RAISE IRQ\n");
-            //qemu_irq_raise(s->irq);
-        }
-        break;
-    case SPI_RXDATA:
-        break;
-    case SPI_CLKDIV:
-        s->clkdiv = val;
-        break;
-    case SPI_CNT:
-        s->cnt = val;
-        break;
-    case SPI_IDD:
-        s->idd = val;
-        break;
+    switch (R_CFG_WORD_SIZE(REG(s, R_CFG))) {
+    case R_CFG_WORD_SIZE_8B:
+        return 1;
+    case R_CFG_WORD_SIZE_16B:
+        return 2;
+    case R_CFG_WORD_SIZE_32B:
+        return 4;
     default:
-        hw_error("s5l8900_spi: bad write offset 0x" TARGET_FMT_plx "\n", offset);
+        break;
     }
+    g_assert_not_reached();
+}
+
+static void apple_spi_update_xfer_tx(S5L8900SPIState *s)
+{
+    if (fifo8_is_empty(&s->tx_fifo)) {
+        REG(s, R_STATUS) |= R_STATUS_TXEMPTY;
+    }
+}
+
+static void apple_spi_update_xfer_rx(S5L8900SPIState *s)
+{
+    if (!fifo8_is_empty(&s->rx_fifo)) {
+        REG(s, R_STATUS) |= R_STATUS_RXREADY;
+    }
+}
+
+static void apple_spi_update_irq(S5L8900SPIState *s)
+{
+    uint32_t irq = 0;
+    uint32_t mask = 0;
+
+    if (REG(s, R_CFG) & R_CFG_IE_RXREADY) {
+        mask |= R_STATUS_RXREADY;
+    }
+    if (REG(s, R_CFG) & R_CFG_IE_TXEMPTY) {
+        mask |= R_STATUS_TXEMPTY;
+    }
+    if (REG(s, R_CFG) & R_CFG_IE_COMPLETE) {
+        mask |= R_STATUS_COMPLETE;
+    }
+
+    if (REG(s, R_STATUS) & mask) {
+        irq = 1;
+    }
+    if (irq != s->last_irq) {
+        s->last_irq = irq;
+        qemu_set_irq(s->irq, irq);
+    }
+}
+
+static void apple_spi_update_cs(S5L8900SPIState *s)
+{
+    BusState *b = BUS(s->spi);
+    BusChild *kid = QTAILQ_FIRST(&b->children);
+    if (kid) {
+        // TODO GPIO not properly setup yet
+        //qemu_set_irq(qdev_get_gpio_in_named(kid->child, SSI_GPIO_CS, 0), (REG(s, R_PIN) & R_PIN_CS) != 0);
+    }
+}
+
+static void apple_spi_cs_set(void *opaque, int pin, int level)
+{
+    S5L8900SPIState *s = S5L8900SPI(opaque);
+    if (level) {
+        REG(s, R_PIN) |= R_PIN_CS;
+    } else {
+        REG(s, R_PIN) &= ~R_PIN_CS;
+    }
+    apple_spi_update_cs(s);
+}
+
+static void apple_spi_run(S5L8900SPIState *s)
+{
+    uint32_t tx;
+    uint32_t rx;
+
+    if (!(REG(s, R_CTRL) & R_CTRL_RUN)) {
+        return;
+    }
+
+    while (!fifo8_is_empty(&s->tx_fifo)) {
+        tx = (uint32_t)fifo8_pop(&s->tx_fifo);
+        rx = ssi_transfer(s->spi, tx);
+        apple_spi_update_xfer_tx(s);
+        if (REG(s, R_RXCNT) > 0) {
+            if (fifo8_is_full(&s->rx_fifo)) {
+                qemu_log_mask(LOG_GUEST_ERROR, "%s: rx overflow\n", __func__);
+                REG(s, R_STATUS) |= R_STATUS_RXOVERFLOW;
+            } else {
+                fifo8_push(&s->rx_fifo, (uint8_t)rx);
+                REG(s, R_RXCNT)--;
+                apple_spi_update_xfer_rx(s);
+            }
+        }
+    }
+    while (!fifo8_is_full(&s->rx_fifo) && (REG(s, R_RXCNT) > 0) && (REG(s, R_CFG) & R_CFG_AGD)) {
+        rx = ssi_transfer(s->spi, 0xff);
+        if (fifo8_is_full(&s->rx_fifo)) {
+            qemu_log_mask(LOG_GUEST_ERROR, "%s: rx overflow\n", __func__);
+            REG(s, R_STATUS) |= R_STATUS_RXOVERFLOW;
+            break;
+        } else {
+            fifo8_push(&s->rx_fifo, (uint8_t)rx);
+            REG(s, R_RXCNT)--;
+            apple_spi_update_xfer_rx(s);
+        }
+    }
+    if (REG(s, R_RXCNT) == 0 && fifo8_is_empty(&s->tx_fifo)) {
+        REG(s, R_STATUS) |= R_STATUS_COMPLETE;
+        REG(s, R_CTRL) &= ~R_CTRL_RUN;
+    }
+}
+
+static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
+{
+    S5L8900SPIState *s = S5L8900SPI(opaque);
+    fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
+
+    uint32_t r;
+    bool run = false;
+
+    r = s->regs[addr >> 2];
+    switch (addr) {
+    case R_RXDATA: {
+        const uint8_t *buf = NULL;
+        int word_size = apple_spi_word_size(s);
+        uint32_t num = 0;
+        if (fifo8_is_empty(&s->rx_fifo)) {
+            qemu_log_mask(LOG_GUEST_ERROR, "%s: rx underflow\n", __func__);
+            r = 0;
+            break;
+        }
+        buf = fifo8_pop_buf(&s->rx_fifo, word_size, &num);
+        memcpy(&r, buf, num);
+        if (fifo8_is_empty(&s->rx_fifo)) {
+            run = true;
+        }
+        break;
+    }
+    case R_STATUS: {
+        int val = 0;
+        val |= fifo8_num_used(&s->tx_fifo) << R_STATUS_TXFIFO_SHIFT;
+        val |= fifo8_num_used(&s->rx_fifo) << R_STATUS_RXFIFO_SHIFT;
+        val &= (R_STATUS_TXFIFO_MASK | R_STATUS_RXFIFO_MASK);
+        r &= ~(R_STATUS_TXFIFO_MASK | R_STATUS_RXFIFO_MASK);
+        r |= val;
+        break;
+    }
+    default:
+        break;
+    }
+
+    if (run) {
+        apple_spi_run(s);
+    }
+    apple_spi_update_irq(s);
+    return r;
+}
+
+static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
+{
+    S5L8900SPIState *s = S5L8900SPI(opaque);
+    fprintf(stderr, "%s (base %d): writing 0x%08x to 0x%08x\n", __func__, s->base, data, addr);
+
+    uint32_t r = data;
+    uint32_t *mmio = &REG(s, addr);
+    uint32_t old = *mmio;
+    bool cs_flg = false;
+    bool run = false;
+
+    switch (addr) {
+    case R_CTRL:
+        if (r & R_CTRL_TX_RESET) {
+            fifo8_reset(&s->tx_fifo);
+        }
+        if (r & R_CTRL_RX_RESET) {
+            fifo8_reset(&s->rx_fifo);
+        }
+        if (r & R_CTRL_RUN) {
+            run = true;
+        }
+        break;
+    case R_STATUS:
+        r = old & (~r);
+        break;
+    case R_PIN:
+        cs_flg = true;
+        break;
+    case R_TXDATA: {
+        int word_size = apple_spi_word_size(s);
+        if ((fifo8_is_full(&s->tx_fifo))
+            || (fifo8_num_free(&s->tx_fifo) < word_size)) {
+            qemu_log_mask(LOG_GUEST_ERROR, "%s: tx overflow\n", __func__);
+            r = 0;
+            break;
+        }
+        fifo8_push_all(&s->tx_fifo, (uint8_t *)&r, word_size);
+        break;
+    case R_CFG:
+        run = true;
+        break;
+    }
+    default:
+        break;
+    }
+
+    *mmio = r;
+    if (cs_flg) {
+        apple_spi_update_cs(s);
+    }
+    if (run) {
+        apple_spi_run(s);
+    }
+    apple_spi_update_irq(s);
 }
 
 static const MemoryRegionOps spi_ops = {
@@ -145,18 +234,9 @@ static const MemoryRegionOps spi_ops = {
 static void s5l8900_spi_reset(DeviceState *d)
 {
     S5L8900SPIState *s = (S5L8900SPIState *)d;
-
-	s->ctrl = 0;
-	s->setup = 0;
-	s->status = 0;
-	s->pin = 0;
-	calloc(s->tx_buffer, 0x8);
-    s->tx_buffer_ind = 0;
-    calloc(s->rx_buffer, 0x8);
-    s->rx_buffer_ind = 0;
-	s->clkdiv = 0;
-	s->cnt = 0;
-	s->idd = 0;
+	memset(s->regs, 0, sizeof(s->regs));
+    fifo8_reset(&s->tx_fifo);
+    fifo8_reset(&s->rx_fifo);
 }
 
 static uint32_t base_addr = 0;
@@ -166,22 +246,44 @@ void set_spi_base(uint32_t base)
 	base_addr = base;
 }
 
-static void s5l8900_spi_init(Object *obj)
+static void s5l8900_spi_realize(DeviceState *dev, struct Error **errp)
 {
-    S5L8900SPIState *s = S5L8900SPI(obj);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+    S5L8900SPIState *s = S5L8900SPI(dev);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+
+    char bus_name[32] = { 0 };
+    snprintf(bus_name, sizeof(bus_name), "%s.bus", dev->id);
+    s->spi = ssi_create_bus(dev, (const char *)bus_name);
 
     sysbus_init_irq(sbd, &s->irq);
+    sysbus_init_irq(sbd, &s->cs_line);
+    qdev_init_gpio_in_named(dev, apple_spi_cs_set, SSI_GPIO_CS, 1);
     char name[5];
     snprintf(name, 5, "spi%d", base_addr);
     memory_region_init_io(&s->iomem, OBJECT(s), &spi_ops, s, name, 0x100);
     sysbus_init_mmio(sbd, &s->iomem);
-	s->base = base_addr;
+    s->base = base_addr;
+
+    fifo8_create(&s->tx_fifo, R_FIFO_DEPTH);
+    fifo8_create(&s->rx_fifo, R_FIFO_DEPTH);
+
+    // create the peripheral
+    switch(s->base) {
+        case 0:
+            break;
+        case 1:
+            ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_LCD_PANEL);
+            break;
+        case 2:
+            ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_MULTITOUCH);
+            break;
+    }
 }
 
 static void s5l8900_spi_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
+    dc->realize = s5l8900_spi_realize;
     dc->reset = s5l8900_spi_reset;
 }
 
@@ -189,7 +291,6 @@ static const TypeInfo s5l8900_spi_info = {
     .name          = TYPE_S5L8900SPI,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(S5L8900SPIState),
-    .instance_init = s5l8900_spi_init,
     .class_init    = s5l8900_spi_class_init,
 };
 

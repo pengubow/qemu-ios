@@ -110,9 +110,10 @@ static void ipod_touch_adm_write(void *opaque, hwaddr offset, uint64_t value, un
                     case 0x300:
                         // seems to be the NAND read command, read the page(s) + bank and instruct the flash device
                         s->nand_state->reading_multiple_pages = false;
-                        buf = malloc(1);
-                        address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x29, MEMTXATTRS_UNSPECIFIED, buf, 1);
+                        buf = malloc(2);
+                        address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x28, MEMTXATTRS_UNSPECIFIED, buf, 2);
                         num_pages = *buf;
+                        num_pages = ( (((num_pages) >> 8) & 0x00FF) | (((num_pages) << 8) & 0xFF00) ); // swap endianness
                         if(num_pages == 1) {
                             // TODO this can probably be refactored to re-use the logic to read multiple pages!
                             address_space_read(&s->downstream_as, s->data2_sec_addr + 0x1104 + 0x44, MEMTXATTRS_UNSPECIFIED, buf, 1);

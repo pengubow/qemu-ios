@@ -3,8 +3,8 @@
 static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t value)
 {
     IPodTouchMultitouchState *s = IPOD_TOUCH_MULTITOUCH(dev);
-    printf("Got value: %d\n", value);
-    return 0x0;
+    //printf("Got value: %d\n", value);
+    return value;
 }
 
 static void ipod_touch_multitouch_realize(SSIPeripheral *d, Error **errp)

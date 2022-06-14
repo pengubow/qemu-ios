@@ -125,7 +125,7 @@ static void apple_spi_run(S5L8900SPIState *s)
 static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
 {
     S5L8900SPIState *s = S5L8900SPI(opaque);
-    fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
+    //fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
 
     uint32_t r;
     bool run = false;
@@ -171,7 +171,7 @@ static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
 static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
 {
     S5L8900SPIState *s = S5L8900SPI(opaque);
-    fprintf(stderr, "%s (base %d): writing 0x%08x to 0x%08x\n", __func__, s->base, data, addr);
+    //fprintf(stderr, "%s (base %d): writing 0x%08x to 0x%08x\n", __func__, s->base, data, addr);
 
     uint32_t r = data;
     uint32_t *mmio = &REG(s, addr);
@@ -187,12 +187,13 @@ static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned
         if (r & R_CTRL_RX_RESET) {
             fifo8_reset(&s->rx_fifo);
         }
-        if (r & R_CTRL_RUN) {
+        if (r & R_CTRL_RUN && !fifo8_is_empty(&s->tx_fifo)) {
             run = true;
         }
         break;
     case R_STATUS:
         r = old & (~r);
+        run = true;
         break;
     case R_PIN:
         cs_flg = true;

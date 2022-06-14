@@ -42,9 +42,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(S5L8900SPIState, S5L8900SPI)
 #define  R_STATUS_TXEMPTY        (1 << 1)
 #define  R_STATUS_RXOVERFLOW     (1 << 3)
 #define  R_STATUS_COMPLETE       (1 << 22)
-#define  R_STATUS_TXFIFO_SHIFT   (6)
+#define  R_STATUS_TXFIFO_SHIFT   (4)
 #define  R_STATUS_TXFIFO_MASK    (31 << R_STATUS_TXFIFO_SHIFT)
-#define  R_STATUS_RXFIFO_SHIFT   (11)
+#define  R_STATUS_RXFIFO_SHIFT   (8)
 #define  R_STATUS_RXFIFO_MASK    (31 << R_STATUS_RXFIFO_SHIFT)
 
 #define  R_PIN                   0x00c
@@ -53,13 +53,12 @@ OBJECT_DECLARE_SIMPLE_TYPE(S5L8900SPIState, S5L8900SPI)
 #define R_TXDATA                0x010
 #define R_RXDATA                0x020
 #define R_CLKDIV                0x030
-#define  R_CLKDIV_MAX            0x7ff
+#define R_CLKDIV_MAX            0x7ff
 #define R_RXCNT                 0x034
 #define R_WORD_DELAY            0x038
 #define R_TXCNT                 0x04c
 
-#define R_FIFO_DEPTH            16
-#define R_FIFO_MAX_DEPTH        (16 * 8)
+#define R_FIFO_DEPTH            8
 
 #define REG(_s,_v)             ((_s)->regs[(_v)>>2])
 #define MMIO_SIZE              (0x4000)

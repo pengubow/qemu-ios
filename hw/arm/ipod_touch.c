@@ -357,7 +357,7 @@ MBX
 */
 static uint64_t s5l8900_mbx_read(void *opaque, hwaddr addr, unsigned size)
 {
-    //fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+    fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
     switch(addr)
     {
         case 0x12c:
@@ -374,7 +374,7 @@ static uint64_t s5l8900_mbx_read(void *opaque, hwaddr addr, unsigned size)
 
 static void s5l8900_mbx_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
-    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
     // do nothing
 }
 
@@ -391,7 +391,7 @@ LCD DISPLAY
 
 static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 {
-    //fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+    fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
 
     s5l8900_lcd_state *s = (s5l8900_lcd_state *)opaque;
     switch(addr)
@@ -400,12 +400,45 @@ static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
             return s->lcd_con;
         case 0x8:
             return s->lcd_con2;
+
+        case 0x20:
+            return s->wnd_con;
+
+        case 0x200:
+            return s->vid_con0;
+        case 0x204:
+            return s->vid_con1;
+
+        case 0x20C:
+            return s->vidt_con0;
+        case 0x210:
+            return s->vidt_con1;
+        case 0x214:
+            return s->vidt_con2;
+        case 0x218:
+            return s->vidt_con3;
+
+        case 0x58:
+            return s->w1_hspan;
+        case 0x5c:
+            return s->w1_display_depth_info;
+        case 0x60:
+            return s->w1_framebuffer_base;
+        case 0x64:
+            return s->w1_display_resolution_info;
+        case 0x68:
+            return s->w1_qlen;
+
+        case 0x70:
+            return s->w2_hspan;
         case 0x74:
-            return s->display_depth_info;
+            return s->w2_display_depth_info;
         case 0x78:
-            return s->framebuffer_base;
+            return s->w2_framebuffer_base;
         case 0x7c:
-            return s->display_resolution_info;
+            return s->w2_display_resolution_info;
+        case 0x80:
+            return s->w2_qlen;
         default:
             break;
     }
@@ -415,7 +448,7 @@ static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     s5l8900_lcd_state *s = (s5l8900_lcd_state *)opaque;
-    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
 
     switch(addr) {
         case 0x4:
@@ -424,14 +457,61 @@ static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned 
         case 0x8:
             s->lcd_con2 = val;
             break;
+
+        case 0x20:
+            s->wnd_con = val;
+            break;
+
+        case 0x200:
+            s->vid_con0 = val;
+            break;
+        case 0x204:
+            s->vid_con1 = val;
+            break;
+
+        case 0x20C:
+            s->vidt_con0 = val;
+            break;
+        case 0x210:
+            s->vidt_con1 = val;
+            break;
+        case 0x214:
+            s->vidt_con2 = val;
+            break;
+        case 0x218:
+            s->vidt_con3 = val;
+            break;
+
+        case 0x58:
+            s->w1_hspan = val;
+            break;
+        case 0x5c:
+            s->w1_display_depth_info = val;
+            break;
+        case 0x60:
+            s->w1_framebuffer_base = val;
+            break;
+        case 0x64:
+            s->w1_display_resolution_info = val;
+            break;
+        case 0x68:
+            s->w1_qlen = val;
+            break;
+
+        case 0x70:
+            s->w2_hspan = val;
+            break;
         case 0x74:
-            s->display_depth_info = val;
+            s->w2_display_depth_info = val;
             break;
         case 0x78:
-            s->framebuffer_base = val;
+            s->w2_framebuffer_base = val;
             break;
         case 0x7c:
-            s->display_resolution_info = val;
+            s->w2_display_resolution_info = val;
+            break;
+        case 0x80:
+            s->w2_qlen = val;
             break;
     }
 }

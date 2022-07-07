@@ -5,7 +5,7 @@
 
 static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 {
-    fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+    // fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
 
     IPodTouchLCDState *s = (IPodTouchLCDState *)opaque;
     switch(addr)
@@ -68,7 +68,7 @@ static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
 static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     IPodTouchLCDState *s = (IPodTouchLCDState *)opaque;
-    fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    // fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
 
     switch(addr) {
         case 0x4:
@@ -225,11 +225,19 @@ static const GraphicHwOps s5l8900_gfx_ops = {
     .gfx_update  = lcd_refresh,
 };
 
+static void ipod_touch_lcd_mouse_event(void *opaque, int x, int y, int z, int buttons_state)
+{
+    //printf("CLICKY %d %d %d %d\n", x, y, z, buttons_state);
+}
+
 static void s5l8900_lcd_realize(DeviceState *dev, Error **errp)
 {
     IPodTouchLCDState *s = IPOD_TOUCH_LCD(dev);
     s->con = graphic_console_init(dev, 0, &s5l8900_gfx_ops, s);
     qemu_console_resize(s->con, 320, 480);
+
+    // add mouse handler
+    qemu_add_mouse_event_handler(ipod_touch_lcd_mouse_event, s, 1, "iPod Touch Touchscreen");
 }
 
 static void s5l8900_lcd_init(Object *obj)

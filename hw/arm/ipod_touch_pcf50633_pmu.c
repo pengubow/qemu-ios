@@ -2,7 +2,6 @@
 
 static int pcf50633_event(I2CSlave *i2c, enum i2c_event event)
 {
-    // TODO
     return 0;
 }
 
@@ -36,7 +35,7 @@ static int pcf50633_send(I2CSlave *i2c, uint8_t data)
 
 static void pcf50633_init(Object *obj)
 {
-    // TODO
+
 }
 
 static void pcf50633_class_init(ObjectClass *klass, void *data)

@@ -249,7 +249,7 @@ static void absolute_mouse_grab(struct sdl2_console *scon)
     SDL_GetWindowSize(scon->real_window, &scr_w, &scr_h);
     if (mouse_x > 0 && mouse_x < scr_w - 1 &&
         mouse_y > 0 && mouse_y < scr_h - 1) {
-        sdl_grab_start(scon);
+        //sdl_grab_start(scon);
     }
 }
 
@@ -486,7 +486,7 @@ static void handle_mousemotion(SDL_Event *ev)
         if (!gui_grab &&
             (ev->motion.x > 0 && ev->motion.x < max_x &&
              ev->motion.y > 0 && ev->motion.y < max_y)) {
-            sdl_grab_start(scon);
+            //sdl_grab_start(scon);
         }
     }
     if (gui_grab || qemu_input_is_absolute() || absolute_enabled) {
@@ -509,7 +509,7 @@ static void handle_mousebutton(SDL_Event *ev)
     if (!gui_grab && !qemu_input_is_absolute()) {
         if (ev->type == SDL_MOUSEBUTTONUP && bev->button == SDL_BUTTON_LEFT) {
             /* start grabbing all events */
-            sdl_grab_start(scon);
+            //sdl_grab_start(scon);
         }
     } else {
         if (ev->type == SDL_MOUSEBUTTONDOWN) {
@@ -911,7 +911,7 @@ static void sdl2_display_init(DisplayState *ds, DisplayOptions *o)
     sdl_cursor_normal = SDL_GetCursor();
 
     if (gui_fullscreen) {
-        sdl_grab_start(&sdl2_console[0]);
+        //sdl_grab_start(&sdl2_console[0]);
     }
 
     atexit(sdl_cleanup);

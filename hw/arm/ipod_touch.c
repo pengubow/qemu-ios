@@ -603,18 +603,15 @@ static void ipod_touch_machine_init(MachineState *machine)
     sysbus_realize(busdev, &error_fatal);
 
     // init AES engine
-    S5L8900AESState *aes_state = malloc(sizeof(S5L8900AESState));
+    dev = qdev_new("ipodtouch.aes");
+    S5L8900AESState *aes_state = IPOD_TOUCH_AES(dev);
     nms->aes_state = aes_state;
-    memset(&(nms->aes_state->custkey), 0, 8 * sizeof(uint32_t));
-    memset(&(nms->aes_state->ivec), 0, 4 * sizeof(uint32_t));
-    MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(s), &aes_ops, nms->aes_state, "aes", 0x100);
-    memory_region_add_subregion(sysmem, AES_MEM_BASE, iomem);
+    memory_region_add_subregion(sysmem, AES_MEM_BASE, &aes_state->iomem);
 
     // init SHA1 engine
     S5L8900SHA1State *sha1_state = malloc(sizeof(S5L8900SHA1State));
     nms->sha1_state = sha1_state;
-    iomem = g_new(MemoryRegion, 1);
+    MemoryRegion *iomem = g_new(MemoryRegion, 1);
     memory_region_init_io(iomem, OBJECT(s), &sha1_ops, nms->sha1_state, "sha1", 0x100);
     memory_region_add_subregion(sysmem, SHA1_MEM_BASE, iomem);
 

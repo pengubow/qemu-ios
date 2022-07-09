@@ -65,8 +65,6 @@ static uint64_t s5l8900_aes_read(void *opaque, hwaddr offset, unsigned size)
 {
     struct S5L8900AESState *aesop = (struct S5L8900AESState *)opaque;
 
-    //fprintf(stderr, "%s: offset 0x%08x\n", __FUNCTION__, offset);
-
     switch(offset) {
         case AES_STATUS:
             return aesop->status;
@@ -83,15 +81,15 @@ static void s5l8900_aes_write(void *opaque, hwaddr offset, uint64_t value, unsig
     struct S5L8900AESState *aesop = (struct S5L8900AESState *)opaque;
     static uint8_t keylenop = 0;
 
-    uint8_t inbuf[0x1000];
+    uint8_t *inbuf;
     uint8_t *buf;
 
-    //fprintf(stderr, "%s: offset 0x%08x value 0x%08x\n", __FUNCTION__, offset, value);
+    // fprintf(stderr, "%s: offset 0x%08x value 0x%08x\n", __FUNCTION__, offset, value);
 
     switch(offset) {
         case AES_GO:
-            memset(inbuf, 0, sizeof(inbuf));
-            cpu_physical_memory_read((aesop->inaddr - 0x80000000), (uint8_t *)inbuf, aesop->insize);
+            inbuf = (uint8_t *)malloc(aesop->insize);
+            cpu_physical_memory_read((aesop->inaddr - 0x80000000), inbuf, aesop->insize);
 
             switch(aesop->keytype) {
                     case AESGID:    
@@ -112,6 +110,7 @@ static void s5l8900_aes_write(void *opaque, hwaddr offset, uint64_t value, unsig
             cpu_physical_memory_write((aesop->outaddr - 0x80000000), buf, aesop->insize);
             memset(aesop->custkey, 0, 0x20);
             memset(aesop->ivec, 0, 0x10);
+            free(inbuf);
             free(buf);
             keylenop = 0;
             aesop->outsize = aesop->insize;

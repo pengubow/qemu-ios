@@ -609,14 +609,13 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, AES_MEM_BASE, &aes_state->iomem);
 
     // init SHA1 engine
-    S5L8900SHA1State *sha1_state = malloc(sizeof(S5L8900SHA1State));
+    dev = qdev_new("ipodtouch.sha1");
+    S5L8900SHA1State *sha1_state = IPOD_TOUCH_SHA1(dev);
     nms->sha1_state = sha1_state;
-    MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(s), &sha1_ops, nms->sha1_state, "sha1", 0x100);
-    memory_region_add_subregion(sysmem, SHA1_MEM_BASE, iomem);
+    memory_region_add_subregion(sysmem, SHA1_MEM_BASE, &sha1_state->iomem);
 
     // init 8900 engine
-    iomem = g_new(MemoryRegion, 1);
+    MemoryRegion *iomem = g_new(MemoryRegion, 1);
     memory_region_init_io(iomem, OBJECT(s), &engine_8900_ops, nsas, "8900engine", 0x100);
     memory_region_add_subregion(sysmem, ENGINE_8900_MEM_BASE, iomem);
 

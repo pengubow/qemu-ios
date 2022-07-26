@@ -18,11 +18,25 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchSYSICState, IPOD_TOUCH_SYSIC)
 
 #define POWER_ID_ADM 0x10
 
+// the GPIO IC is part of the system controller
+#define GPIO_INTLEVEL 0x80
+#define GPIO_INTSTAT  0xA0
+#define GPIO_INTEN    0xC0
+#define GPIO_INTTYPE  0xE0
+
+#define GPIO_NUMINTGROUPS 7
+
 typedef struct IPodTouchSYSICState {
     SysBusDevice parent_obj;
     MemoryRegion iomem;
-    qemu_irq irq;
+    qemu_irq gpio_irqs[GPIO_NUMINTGROUPS];
     uint32_t power_state;
+
+    // GPIO
+    uint32_t gpio_int_level[GPIO_NUMINTGROUPS];
+    uint32_t gpio_int_status[GPIO_NUMINTGROUPS];
+    uint32_t gpio_int_enabled[GPIO_NUMINTGROUPS];
+    uint32_t gpio_int_type[GPIO_NUMINTGROUPS];
 } IPodTouchSYSICState;
 
 #endif

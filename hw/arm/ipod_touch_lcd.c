@@ -228,6 +228,12 @@ static const GraphicHwOps s5l8900_gfx_ops = {
 static void ipod_touch_lcd_mouse_event(void *opaque, int x, int y, int z, int buttons_state)
 {
     //printf("CLICKY %d %d %d %d\n", x, y, z, buttons_state);
+    IPodTouchLCDState *lcd = (IPodTouchLCDState *) opaque;
+    if(buttons_state) {
+        // mouse press
+        lcd->sysic->gpio_int_status[4] |= (1 << 27);
+        qemu_irq_raise(lcd->sysic->gpio_irqs[4]);
+    }
 }
 
 static void s5l8900_lcd_realize(DeviceState *dev, Error **errp)

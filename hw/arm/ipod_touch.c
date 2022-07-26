@@ -549,6 +549,12 @@ static void ipod_touch_machine_init(MachineState *machine)
     IPodTouchSYSICState *sysic_state = IPOD_TOUCH_SYSIC(dev);
     nms->sysic = (IPodTouchSYSICState *) g_malloc0(sizeof(struct IPodTouchSYSICState));
     memory_region_add_subregion(sysmem, SYSIC_MEM_BASE, &sysic_state->iomem);
+    SysBusDevice *busdev = SYS_BUS_DEVICE(dev);
+    for(int grp = 0; grp < GPIO_NUMINTGROUPS; grp++) {
+        sysbus_connect_irq(busdev, grp, s5l8900_get_irq(nms, S5L8900_GPIO_IRQS[grp]));
+    }
+
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G4_IRQ));
 
     dev = exynos4210_uart_create(UART0_MEM_BASE, 256, 0, serial_hd(0), nms->irq[0][24]);
     if (!dev) {
@@ -596,8 +602,9 @@ static void ipod_touch_machine_init(MachineState *machine)
     dev = qdev_new("ipodtouch.lcd");
     IPodTouchLCDState *lcd_state = IPOD_TOUCH_LCD(dev);
     lcd_state->sysmem = sysmem;
+    lcd_state->sysic = sysic_state;
     nms->lcd_state = lcd_state;
-    SysBusDevice *busdev = SYS_BUS_DEVICE(dev);
+    busdev = SYS_BUS_DEVICE(dev);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_LCD_IRQ));
     memory_region_add_subregion(sysmem, DISPLAY_MEM_BASE, &lcd_state->iomem);
     sysbus_realize(busdev, &error_fatal);

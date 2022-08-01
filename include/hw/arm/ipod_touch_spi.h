@@ -30,8 +30,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(S5L8900SPIState, S5L8900SPI)
 #define  R_CFG_MODE_DMA          2
 #define  R_CFG_IE_RXREADY        (1 << 7)
 #define  R_CFG_IE_TXEMPTY        (1 << 8)
-#define  R_CFG_LSB_FIRST	     (1 << 13)
-#define  R_CFG_WORD_SIZE(_x)     (((_x) >> 15) & 0x3)
+#define  R_CFG_WORD_SIZE(_x)     (((_x) >> 13) & 0x3)
 #define  R_CFG_WORD_SIZE_8B      0
 #define  R_CFG_WORD_SIZE_16B     1
 #define  R_CFG_WORD_SIZE_32B     2
@@ -58,7 +57,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(S5L8900SPIState, S5L8900SPI)
 #define R_WORD_DELAY            0x038
 #define R_TXCNT                 0x04c
 
-#define R_FIFO_DEPTH            8
+#define R_FIFO_DEPTH            50000
 
 #define REG(_s,_v)             ((_s)->regs[(_v)>>2])
 #define MMIO_SIZE              (0x4000)

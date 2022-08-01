@@ -104,6 +104,8 @@ static void apple_spi_run(S5L8900SPIState *s)
             }
         }
     }
+
+    // fetch the remaining bytes by sending sentinel bytes.
     while (!fifo8_is_full(&s->rx_fifo) && (REG(s, R_RXCNT) > 0) && (REG(s, R_CFG) & R_CFG_AGD)) {
         rx = ssi_transfer(s->spi, 0xff);
         if (fifo8_is_full(&s->rx_fifo)) {
@@ -198,10 +200,11 @@ static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned
     case R_PIN:
         cs_flg = true;
         break;
-    case R_TXDATA: {
+    case R_TXDATA ... R_TXDATA + 3: {
         int word_size = apple_spi_word_size(s);
         if ((fifo8_is_full(&s->tx_fifo))
             || (fifo8_num_free(&s->tx_fifo) < word_size)) {
+            hw_error("OVERFLOW: %d\n", fifo8_num_free(&s->tx_fifo));
             qemu_log_mask(LOG_GUEST_ERROR, "%s: tx overflow\n", __func__);
             r = 0;
             break;

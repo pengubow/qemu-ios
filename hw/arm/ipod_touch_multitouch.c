@@ -20,15 +20,71 @@ static void prepare_interface_version_response(IPodTouchMultitouchState *s) {
     s->out_buffer[15] = (checksum >> 8) & 0xFF;
 }
 
-static void prepare_report_info_response(IPodTouchMultitouchState *s) {
+static void prepare_report_info_response(IPodTouchMultitouchState *s, uint8_t report_id) {
     memset(s->out_buffer + 1, 0, 15);
 
     // set the error
     s->out_buffer[2] = 0;
 
     // set the report length
-    s->out_buffer[3] = (MT_REPORT_LENGTH & 0xFF);
-    s->out_buffer[4] = (MT_REPORT_LENGTH >> 8) & 0xFF;
+    uint32_t report_length = 0;
+    if(report_id == MT_REPORT_FAMILY_ID) {
+        report_length = MT_REPORT_FAMILY_ID_SIZE;
+    }
+    else if(report_id == MT_REPORT_SENSOR_INFO) {
+        report_length = MT_REPORT_SENSOR_INFO_SIZE;
+    }
+    else if(report_id == MT_REPORT_SENSOR_REGION_DESC) {
+        report_length = MT_REPORT_SENSOR_REGION_DESC_SIZE;
+    }
+    else if(report_id == MT_REPORT_SENSOR_REGION_PARAM) {
+        report_length = MT_REPORT_SENSOR_REGION_PARAM_SIZE;
+    }
+    else if(report_id == MT_REPORT_SENSOR_DIMENSIONS) {
+        report_length = MT_REPORT_SENSOR_DIMENSIONS_SIZE;
+    }
+    else {
+        hw_error("Unknown report ID 0x%02x\n", report_id);
+    }
+
+    s->out_buffer[3] = (report_length & 0xFF);
+    s->out_buffer[4] = (report_length >> 8) & 0xFF;
+
+    // compute and set the checksum
+    uint32_t checksum = 0;
+    for(int i = 0; i < 14; i++) {
+        checksum += s->out_buffer[i];
+    }
+
+    s->out_buffer[14] = (checksum & 0xFF);
+    s->out_buffer[15] = (checksum >> 8) & 0xFF;
+}
+
+static void prepare_short_control_response(IPodTouchMultitouchState *s, uint8_t report_id) {
+    memset(s->out_buffer + 1, 0, 15);
+
+    if(report_id == MT_REPORT_FAMILY_ID) {
+        s->out_buffer[3] = MT_FAMILY_ID;
+    }
+    else if(report_id == MT_REPORT_SENSOR_INFO) {
+        s->out_buffer[3] = MT_ENDIANNESS;
+        s->out_buffer[4] = MT_SENSOR_ROWS;
+        s->out_buffer[5] = MT_SENSOR_COLUMNS;
+        s->out_buffer[6] = (MT_BCD_VERSION & 0xFF);
+        s->out_buffer[7] = (MT_BCD_VERSION >> 8) & 0xFF;
+    }
+    else if(report_id == MT_REPORT_SENSOR_REGION_DESC) {
+        s->out_buffer[3] = MT_SENSOR_REGION_DESC;
+    }
+    else if(report_id == MT_REPORT_SENSOR_REGION_PARAM) {
+        s->out_buffer[3] = MT_SENSOR_REGION_PARAM;
+    }
+    else if(report_id == MT_REPORT_SENSOR_DIMENSIONS) {
+        // TODO fill in correctly
+    }
+    else {
+        hw_error("Unknown report ID 0x%02x\n", report_id);
+    }
 
     // compute and set the checksum
     uint32_t checksum = 0;
@@ -97,13 +153,18 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
             s->buf_size = 500; // should be enough initially, until we get the packet length
             memset(s->out_buffer + 1, 0, 500 - 1); // just return zeros
         }
-        else if(value == 0xE2) { // get interface version
+        else if(value == 0x47) { // unknown command, probably used to clear the interrupt
+            s->buf_size = 2;
+        }
+        else if(value == MT_CMD_GET_INTERFACE_VERSION) {
             s->buf_size = 16;
             prepare_interface_version_response(s);
         }
-        else if(value == 0xE3) { // get report info
+        else if(value == MT_CMD_GET_REPORT_INFO) {
             s->buf_size = 16;
-            prepare_report_info_response(s);
+        }
+        else if(value == MT_CMD_SHORT_CONTROL_READ) {
+            s->buf_size = 16;
         }
         else {
             hw_error("Unknown command 0x%02x!", value);
@@ -135,6 +196,12 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
         s->buf_size = data_len;
         s->buf_ind = 0;
     }
+    else if(s->cur_cmd == MT_CMD_GET_REPORT_INFO && s->in_buffer_ind == 2) {
+        prepare_report_info_response(s, s->in_buffer[1]);
+    }
+    else if(s->cur_cmd == MT_CMD_SHORT_CONTROL_READ && s->in_buffer_ind == 2) {
+        prepare_short_control_response(s, s->in_buffer[1]);
+    }
 
     // TODO process register writes!
 
@@ -155,8 +222,8 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
         // we're done with the command
         s->cur_cmd = 0;
         s->buf_size = 0;
-        free(s->out_buffer);
-        free(s->in_buffer);
+        //free(s->out_buffer);
+        //free(s->in_buffer);
     }
 
     return ret_val;

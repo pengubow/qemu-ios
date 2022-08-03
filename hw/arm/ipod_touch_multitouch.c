@@ -20,6 +20,21 @@ static void prepare_interface_version_response(IPodTouchMultitouchState *s) {
     s->out_buffer[15] = (checksum >> 8) & 0xFF;
 }
 
+static void prepare_cmd_status_response(IPodTouchMultitouchState *s) {
+    memset(s->out_buffer + 1, 0, 15);
+
+    // TODO we should probably set some CMD status here
+
+    // compute and set the checksum
+    uint32_t checksum = 0;
+    for(int i = 0; i < 14; i++) {
+        checksum += s->out_buffer[i];
+    }
+
+    s->out_buffer[14] = (checksum & 0xFF);
+    s->out_buffer[15] = (checksum >> 8) & 0xFF;
+}
+
 static void prepare_report_info_response(IPodTouchMultitouchState *s, uint8_t report_id) {
     memset(s->out_buffer + 1, 0, 15);
 
@@ -28,7 +43,10 @@ static void prepare_report_info_response(IPodTouchMultitouchState *s, uint8_t re
 
     // set the report length
     uint32_t report_length = 0;
-    if(report_id == MT_REPORT_FAMILY_ID) {
+    if(report_id == MT_REPORT_UNKNOWN1) {
+        report_length = MT_REPORT_UNKNOWN1_SIZE;
+    }
+    else if(report_id == MT_REPORT_FAMILY_ID) {
         report_length = MT_REPORT_FAMILY_ID_SIZE;
     }
     else if(report_id == MT_REPORT_SENSOR_INFO) {
@@ -149,18 +167,25 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
             s->buf_size = 2;
             s->out_buffer[1] = 0x0;
         }
-        else if(value == 0x30) { // HBPP data packet
-            s->buf_size = 500; // should be enough initially, until we get the packet length
-            memset(s->out_buffer + 1, 0, 500 - 1); // just return zeros
+        else if(value == MT_CMD_HBPP_DATA_PACKET) {
+            s->buf_size = 20; // should be enough initially, until we get the packet length
+            memset(s->out_buffer + 1, 0, 20 - 1); // just return zeros
         }
         else if(value == 0x47) { // unknown command, probably used to clear the interrupt
             s->buf_size = 2;
+        }
+        else if(value == MT_CMD_GET_CMD_STATUS) {
+            s->buf_size = 16;
+            prepare_cmd_status_response(s);
         }
         else if(value == MT_CMD_GET_INTERFACE_VERSION) {
             s->buf_size = 16;
             prepare_interface_version_response(s);
         }
         else if(value == MT_CMD_GET_REPORT_INFO) {
+            s->buf_size = 16;
+        }
+        else if(value == MT_CMD_SHORT_CONTROL_WRITE) {
             s->buf_size = 16;
         }
         else if(value == MT_CMD_SHORT_CONTROL_READ) {
@@ -174,7 +199,7 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
     s->in_buffer[s->in_buffer_ind] = value;
     s->in_buffer_ind++;
 
-    if(s->cur_cmd == 0x30 && s->in_buffer_ind == 10) {
+    if(s->cur_cmd == MT_CMD_HBPP_DATA_PACKET && s->in_buffer_ind == 10) {
         // verify the header checksum
         uint32_t checksum = 0;
         for(int i = 2; i < 8; i++) {
@@ -198,6 +223,9 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
     }
     else if(s->cur_cmd == MT_CMD_GET_REPORT_INFO && s->in_buffer_ind == 2) {
         prepare_report_info_response(s, s->in_buffer[1]);
+    }
+    else if(s->cur_cmd == MT_CMD_SHORT_CONTROL_WRITE && s->in_buffer_ind == 16) {
+        // TODO we should persist the report here!
     }
     else if(s->cur_cmd == MT_CMD_SHORT_CONTROL_READ && s->in_buffer_ind == 2) {
         prepare_short_control_response(s, s->in_buffer[1]);

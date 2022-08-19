@@ -8,7 +8,6 @@
 #include "qapi/error.h"
 #include "hw/hw.h"
 #include "hw/ssi/ssi.h"
-#include "hw/arm/ipod_touch_spi.h"
 
 #define TYPE_IPOD_TOUCH_MULTITOUCH                "ipodtouch.multitouch"
 OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchMultitouchState, IPOD_TOUCH_MULTITOUCH)
@@ -45,6 +44,20 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchMultitouchState, IPOD_TOUCH_MULTITOUCH)
 #define MT_CMD_GET_REPORT_INFO       0xE3
 #define MT_CMD_SHORT_CONTROL_WRITE   0xE4
 #define MT_CMD_SHORT_CONTROL_READ    0xE6
+#define MT_CMD_FRAME_READ            0xEA
+
+// frame types
+#define MT_FRAME_TYPE_PATH 0x44
+
+typedef struct MTFrameLengthPacket
+{
+    uint8_t cmd;
+    uint8_t length1;
+    uint8_t length2;
+    uint8_t unused[11];
+    uint8_t checksum1;
+    uint8_t checksum2;
+} __attribute__((__packed__)) MTFrameLengthPacket;
 
 typedef struct MTFrameHeader
 {
@@ -65,7 +78,17 @@ typedef struct MTFrameHeader
     uint16_t unk_12;
     uint16_t unk_14;
     uint16_t unk_16;
-} MTFrameHeader;
+} __attribute__((__packed__)) MTFrameHeader;
+
+typedef struct MTFramePacket
+{
+    uint8_t cmd;
+    uint8_t unused1;
+    uint8_t length1;
+    uint8_t length2;
+    uint8_t checksum_pad;
+    MTFrameHeader header;
+} __attribute__((__packed__)) MTFramePacket;
 
 typedef struct FingerData
 {
@@ -85,7 +108,15 @@ typedef struct FingerData
     uint16_t unk_16;
     uint16_t unk_18;
     uint16_t unk_1A;
-} FingerData;
+} __attribute__((__packed__)) FingerData;
+
+typedef struct MTFrame {
+    MTFrameLengthPacket frame_length;
+    MTFramePacket frame_packet;
+    FingerData finger_data; // TODO we assume one finger for now
+    uint8_t checksum1;
+    uint8_t checksum2;
+} __attribute__((__packed__)) MTFrame;
 
 typedef struct IPodTouchMultitouchState {
     SSIPeripheral ssidev;
@@ -96,6 +127,9 @@ typedef struct IPodTouchMultitouchState {
     uint32_t buf_ind;
     uint32_t in_buffer_ind;
     uint8_t hbpp_atn_ack_response[2];
+    MTFrame *next_frame;
 } IPodTouchMultitouchState;
+
+void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uint32_t y);
 
 #endif

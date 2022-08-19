@@ -279,8 +279,12 @@ static void s5l8900_spi_realize(DeviceState *dev, struct Error **errp)
             ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_LCD_PANEL);
             break;
         case 2:
-            ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_MULTITOUCH);
+        {
+            DeviceState *dev = ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_MULTITOUCH);
+            IPodTouchMultitouchState *mt = IPOD_TOUCH_MULTITOUCH(dev);
+            s->mt = mt;
             break;
+        }
     }
 }
 

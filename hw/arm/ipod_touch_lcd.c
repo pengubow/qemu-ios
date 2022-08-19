@@ -230,6 +230,8 @@ static void ipod_touch_lcd_mouse_event(void *opaque, int x, int y, int z, int bu
     //printf("CLICKY %d %d %d %d\n", x, y, z, buttons_state);
     IPodTouchLCDState *lcd = (IPodTouchLCDState *) opaque;
     if(buttons_state) {
+        ipod_touch_multitouch_on_touch(lcd->mt, 0, 0); // TODO fix x and y
+
         // mouse press
         lcd->sysic->gpio_int_status[4] |= (1 << 27);
         qemu_irq_raise(lcd->sysic->gpio_irqs[4]);

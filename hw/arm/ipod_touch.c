@@ -594,7 +594,9 @@ static void ipod_touch_machine_init(MachineState *machine)
     sysbus_create_simple("s5l8900spi", SPI1_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI1_IRQ));
 
     set_spi_base(2);
-    sysbus_create_simple("s5l8900spi", SPI2_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI2_IRQ));
+    dev = sysbus_create_simple("s5l8900spi", SPI2_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI2_IRQ));
+    S5L8900SPIState *spi2_state = S5L8900SPI(dev);
+    nms->spi2_state = spi2_state;
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
 
@@ -603,6 +605,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     IPodTouchLCDState *lcd_state = IPOD_TOUCH_LCD(dev);
     lcd_state->sysmem = sysmem;
     lcd_state->sysic = sysic_state;
+    lcd_state->mt = spi2_state->mt;
     nms->lcd_state = lcd_state;
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_LCD_IRQ));

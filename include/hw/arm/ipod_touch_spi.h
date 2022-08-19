@@ -68,6 +68,7 @@ typedef struct S5L8900SPIState {
 
     MemoryRegion iomem;
     SSIBus *spi;
+    IPodTouchMultitouchState *mt;
 
     qemu_irq irq;
     uint32_t last_irq;

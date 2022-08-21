@@ -128,6 +128,7 @@ typedef struct IPodTouchMultitouchState {
     uint32_t in_buffer_ind;
     uint8_t hbpp_atn_ack_response[2];
     MTFrame *next_frame;
+    uint32_t frame_counter;
 } IPodTouchMultitouchState;
 
 void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uint32_t y);

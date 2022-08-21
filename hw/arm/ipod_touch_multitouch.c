@@ -121,7 +121,7 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
     //printf("<MULTITOUCH> Got value: 0x%02x\n", value);
 
     if(s->cur_cmd == 0) {
-        printf("Starting command 0x%02x\n", value);
+        //printf("Starting command 0x%02x\n", value);
         // we're currently not in a command - start a new command
         s->cur_cmd = value;
         s->out_buffer = malloc(0x100);
@@ -241,10 +241,10 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
     uint8_t ret_val = s->out_buffer[s->buf_ind];
     s->buf_ind++;
 
-    printf("<MULTITOUCH> Got value: 0x%02x, returning 0x%02x (index: %d, buffer length: %d)\n", value, ret_val, s->buf_ind, s->buf_size);
+    //printf("<MULTITOUCH> Got value: 0x%02x, returning 0x%02x (index: %d, buffer length: %d)\n", value, ret_val, s->buf_ind, s->buf_size);
 
     if(s->buf_ind == s->buf_size) {
-        printf("Finished command 0x%02x\n", s->cur_cmd);
+        //printf("Finished command 0x%02x\n", s->cur_cmd);
 
         if(s->cur_cmd == 0x1E) {
             // make sure we return a success status on the next HBPP ACK
@@ -295,6 +295,7 @@ void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uin
 
     frame->frame_packet.header.type = MT_FRAME_TYPE_PATH;
     frame->frame_packet.header.headerLen = sizeof(MTFrameHeader);
+    frame->frame_packet.header.timestamp = s->frame_counter;
     frame->frame_packet.header.numFingers = 1;
     frame->frame_packet.header.fingerDataLen = sizeof(FingerData);
     frame->finger_data.event = 7;
@@ -308,6 +309,7 @@ void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uin
     frame->checksum2 = (checksum >> 8) & 0xFF;    
 
     s->next_frame = frame;
+    s->frame_counter += 1;
 }
 
 static void ipod_touch_multitouch_realize(SSIPeripheral *d, Error **errp)

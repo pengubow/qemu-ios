@@ -6,6 +6,7 @@
 #include "hw/platform-bus.h"
 #include "hw/hw.h"
 #include "hw/irq.h"
+#include "qemu/lockable.h"
 
 #define NAND_NUM_BANKS 8
 #define NAND_BYTES_PER_PAGE 2048
@@ -27,6 +28,9 @@
 #define NAND_CMD_ID  0x90
 #define NAND_CMD_READ 0x30
 #define NAND_CMD_READSTATUS 0x70
+
+#define FILESYSTEM_START_VPN 206851
+#define FILESYSTEM_NUM_PAGES 132854
 
 #define TYPE_ITNAND "itnand"
 OBJECT_DECLARE_SIMPLE_TYPE(ITNandState, ITNAND)
@@ -51,9 +55,10 @@ typedef struct ITNandState {
     uint32_t buffered_page;
     bool reading_multiple_pages;
     uint32_t cur_bank_reading;
-    uint32_t banks_to_read[256]; // used when in multiple page read mode
-    uint32_t pages_to_read[256]; // used when in multiple page read mode
+    uint32_t banks_to_read[512]; // used when in multiple page read mode
+    uint32_t pages_to_read[512]; // used when in multiple page read mode
     bool is_writing;
+    QemuMutex lock;
 } ITNandState;
 
 void nand_set_buffered_page(ITNandState *s, uint32_t page);

@@ -93,13 +93,14 @@ typedef struct {
 
 typedef struct s5l8900_clk1_s
 {
-	uint32_t	clk1_config0;
-    uint32_t    clk1_config1;
-    uint32_t    clk1_config2;
-	uint32_t    clk1_pll1con;
-    uint32_t    clk1_pll2con;
-    uint32_t    clk1_pll3con;
-	uint32_t    clk1_plllock;
+	uint32_t	config0;
+    uint32_t    config1;
+    uint32_t    config2;
+    uint32_t    pll0con;
+	uint32_t    pll1con;
+    uint32_t    pll2con;
+    uint32_t    pll3con;
+	uint32_t    plllock;
 
 } s5l8900_clk1_s;
 

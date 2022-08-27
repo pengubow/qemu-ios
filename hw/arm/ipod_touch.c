@@ -17,7 +17,7 @@
 #include <openssl/aes.h>
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
-#define IBOOT_BASE 0x18000000
+#define IBOOT_BASE 0x0
 #define LLB_BASE 0x22000000
 #define SRAM1_MEM_BASE 0x22020000
 #define CLOCK0_MEM_BASE 0x38100000
@@ -251,7 +251,7 @@ static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsign
 
     switch (addr) {
         case CLOCK1_PLLLOCK:
-            s->clk1_plllock = val;
+            s->plllock = val;
             break;
       default:
             break;
@@ -264,17 +264,23 @@ static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
 
     switch (addr) {
         case CLOCK1_CONFIG0:
-            return s->clk1_config0;
+            return s->config0;
         case CLOCK1_CONFIG1:
-            return s->clk1_config1;
+            return s->config1;
         case CLOCK1_CONFIG2:
-            return s->clk1_config2;
+            return s->config2;
         case CLOCK1_PLL0CON:
-            return (103 << 8) | (6 << 24); // this gives a clock frequency of 412MHz (12MHz * 2) * (103 / 6)
+            return s->pll0con;
+        case CLOCK1_PLL1CON:
+            return s->pll1con;
+        case CLOCK1_PLL2CON:
+            return s->pll2con;
+        case CLOCK1_PLL3CON:
+            return s->pll3con;
         case CLOCK1_PLLLOCK:
-            return s->clk1_plllock;
+            return s->plllock;
         case CLOCK1_PLLMODE:
-            return 0x1f; // toggle the last 4 bits - indicating that PLL is enabled for all modes, set 1 bit to enable divisor mode for CLOCK PPL
+            return 0x000a003a; // extracted from iPod Touch
       default:
             break;
     }
@@ -386,18 +392,35 @@ static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
     nms->clock1 = (s5l8900_clk1_s *) g_malloc0(sizeof(struct s5l8900_clk1_s));
-    nms->clock1->clk1_plllock = 1 | 2 | 4 | 8;
+    nms->clock1->plllock = 1 | 2 | 4 | 8;
 
     uint64_t config0 = 0x0;
+    config0 |= (1 << 12); // set the clock PPL to index 1
     config0 |= (1 << 24); // indicate that we have a memory divisor
     config0 |= (2 << 16); // set the memory divisor to two
-    nms->clock1->clk1_config0 = config0;
+    nms->clock1->config0 = config0;
 
     uint64_t config1 = 0x0;
+    config1 |= (1 << 12); // set the bus PPL to index 1
     config1 |= (1 << 24); // indicate that we have a bus divisor
-    config1 |= (3 << 16); // set the memory divisor to three
+    config1 |= (3 << 16); // set the bus divisor to three
+    config1 |= (1 << 8);  // indicate that unknown has a divisor
+    config1 |= 3;         // set the unknown divisor 1 to 3
+    config1 |= (0 << 4);  // set the unknown divisor 2 to 0
     config1 |= (1 << 20); // set the peripheral factor to 1
-    nms->clock1->clk1_config1 = config1;
+    nms->clock1->config1 = config1;
+
+    uint64_t config2 = 0x0;
+    config2 |= (3 << 28); // set the peripheral PPL to index 3
+    config2 |= (1 << 24); // indicate that the display has a divisor
+    config2 |= (1 << 16); // set the display divisor to 1
+    nms->clock1->config2 = config2;
+
+    // set the PLL configurations (MDIV, PDIV, SDIV)
+    nms->clock1->pll0con = (80 << 8) | (8 << 24) | 0;
+    nms->clock1->pll1con = (103 << 8) | (6 << 24) | 0;
+    nms->clock1->pll2con = (156 << 8) | (53 << 24) | 2;
+    nms->clock1->pll3con = (72 << 8) | (8 << 24) | 1;
 
     // TODO same as clock1 for now
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
@@ -450,8 +473,8 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     // load iBoot
     file_data = NULL;
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot.bin", (char **)&file_data, &fsize, NULL)) {
-        allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
+    if (g_file_get_contents("/Users/martijndevos/Downloads/openiBoot/openiboot/openiboot_qemu.bin", (char **)&file_data, &fsize, NULL)) {
+        allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x8000000);
         address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
 

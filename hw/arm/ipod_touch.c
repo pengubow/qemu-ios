@@ -408,6 +408,10 @@ static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
     config1 |= 3;         // set the unknown divisor 1 to 3
     config1 |= (0 << 4);  // set the unknown divisor 2 to 0
     config1 |= (1 << 20); // set the peripheral factor to 1
+
+    config1 |= (1 << 14); // unknown
+    config1 |= (1 << 28); // set some PPL index to 1
+    config1 |= (1 << 30); // unknown
     nms->clock1->config1 = config1;
 
     uint64_t config2 = 0x0;

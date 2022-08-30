@@ -17,7 +17,7 @@
 #include <openssl/aes.h>
 
 #define IPOD_TOUCH_PHYS_BASE (0xc0000000)
-#define IBOOT_BASE 0x0
+#define IBOOT_BASE 0x18000000
 #define LLB_BASE 0x22000000
 #define SRAM1_MEM_BASE 0x22020000
 #define CLOCK0_MEM_BASE 0x38100000
@@ -473,8 +473,8 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     // load iBoot
     file_data = NULL;
-    if (g_file_get_contents("/Users/martijndevos/Downloads/openiBoot/openiboot/openiboot_qemu.bin", (char **)&file_data, &fsize, NULL)) {
-        allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x8000000);
+    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot.bin", (char **)&file_data, &fsize, NULL)) {
+        allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
         address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
 

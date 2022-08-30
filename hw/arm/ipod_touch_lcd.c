@@ -228,13 +228,23 @@ static const GraphicHwOps s5l8900_gfx_ops = {
 static void ipod_touch_lcd_mouse_event(void *opaque, int x, int y, int z, int buttons_state)
 {
     //printf("CLICKY %d %d %d %d\n", x, y, z, buttons_state);
+
+    // convert x and y to fractional numbers
+    float fx = x / pow(2, 15);
+    float fy = y / pow(2, 15);
+
     IPodTouchLCDState *lcd = (IPodTouchLCDState *) opaque;
     if(buttons_state) {
-        ipod_touch_multitouch_on_touch(lcd->mt, 0, 0); // TODO fix x and y
-
-        // mouse press
-        //lcd->sysic->gpio_int_status[4] |= (1 << 27);
-        //qemu_irq_raise(lcd->sysic->gpio_irqs[4]);
+        ipod_touch_multitouch_on_touch(lcd->mt, fx, fy);
+        lcd->sysic->gpio_int_status[4] |= (1 << 27);
+        qemu_irq_raise(lcd->sysic->gpio_irqs[4]);
+    }
+    else {
+        if(lcd->mt->touch_down) {
+            ipod_touch_multitouch_on_release(lcd->mt, fx, fy);
+            lcd->sysic->gpio_int_status[4] |= (1 << 27);
+            qemu_irq_raise(lcd->sysic->gpio_irqs[4]);
+        }
     }
 }
 

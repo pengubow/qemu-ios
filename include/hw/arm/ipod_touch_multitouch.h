@@ -24,6 +24,10 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchMultitouchState, IPOD_TOUCH_MULTITOUCH)
 #define MT_SENSOR_SURFACE_WIDTH  5000
 #define MT_SENSOR_SURFACE_HEIGHT 7500
 
+// internal surface width/height
+#define MT_INTERNAL_SENSOR_SURFACE_WIDTH  (9000 - MT_SENSOR_SURFACE_WIDTH) * 84 / 73
+#define MT_INTERNAL_SENSOR_SURFACE_HEIGHT (13850 - MT_SENSOR_SURFACE_HEIGHT) * 84 / 73
+
 // report IDs
 #define MT_REPORT_UNKNOWN1            0x70
 #define MT_REPORT_FAMILY_ID           0xD1
@@ -50,6 +54,11 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchMultitouchState, IPOD_TOUCH_MULTITOUCH)
 
 // frame types
 #define MT_FRAME_TYPE_PATH 0x44
+
+// frame event types
+#define MT_EVENT_TOUCH_START 0x3
+#define MT_EVENT_TOUCH_MOVED 0x4
+#define MT_EVENT_TOUCH_ENDED 0x7
 
 typedef struct MTFrameLengthPacket
 {
@@ -131,8 +140,10 @@ typedef struct IPodTouchMultitouchState {
     uint8_t hbpp_atn_ack_response[2];
     MTFrame *next_frame;
     uint32_t frame_counter;
+    bool touch_down;
 } IPodTouchMultitouchState;
 
-void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uint32_t y);
+void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float y);
+void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s, float x, float y);
 
 #endif

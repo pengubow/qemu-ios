@@ -1,6 +1,7 @@
 #ifndef IPOD_TOUCH_LCD_H
 #define IPOD_TOUCH_LCD_H
 
+#include <math.h>
 #include "qemu/osdep.h"
 #include "qemu/module.h"
 #include "qemu/timer.h"

@@ -264,8 +264,7 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
     return ret_val;
 }
 
-void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uint32_t y) {
-    // we received a touch event. Add a packet to the buffer.
+static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, float y, uint16_t radius1, uint16_t radius2, uint16_t radius3, uint16_t contactDensity) {
     MTFrame *frame = calloc(sizeof(MTFrame), sizeof(uint8_t *));
 
     uint16_t data_len = sizeof(MTFrameHeader) + sizeof(FingerData) + 2;
@@ -296,11 +295,20 @@ void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uin
     frame->frame_packet.checksum_pad = 0xFF - (checksum & 0xFF) + 1;
 
     frame->frame_packet.header.type = MT_FRAME_TYPE_PATH;
+    frame->frame_packet.header.frameNum = s->frame_counter;
     frame->frame_packet.header.headerLen = sizeof(MTFrameHeader);
-    frame->frame_packet.header.timestamp = s->frame_counter;
+    frame->frame_packet.header.timestamp = s->frame_counter * 16; // TODO for now
     frame->frame_packet.header.numFingers = 1;
     frame->frame_packet.header.fingerDataLen = sizeof(FingerData);
-    frame->finger_data.event = 7;
+
+    // create the finger data
+    frame->finger_data.event = event;
+    frame->finger_data.x = (int)(x * MT_INTERNAL_SENSOR_SURFACE_WIDTH);
+    frame->finger_data.y = (int)(y * MT_INTERNAL_SENSOR_SURFACE_HEIGHT);
+    frame->finger_data.radius1 = radius1;
+    frame->finger_data.radius2 = radius2;
+    frame->finger_data.radius3 = radius3;
+    frame->finger_data.contactDensity = contactDensity; // seems to be a medium press
 
     // compute the checksum over the frame data.
     checksum = 0;
@@ -308,10 +316,24 @@ void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, uint32_t x, uin
         checksum += ((uint8_t *) &frame->frame_packet.header)[i];
     }
     frame->checksum1 = (checksum & 0xFF);
-    frame->checksum2 = (checksum >> 8) & 0xFF;    
+    frame->checksum2 = (checksum >> 8) & 0xFF;
 
-    s->next_frame = frame;
+    return frame;
+}
+
+void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float y) {
+    printf("On touch!\n");
+    // we received a touch event. Add a packet to the buffer.
+    s->next_frame = get_frame(s, MT_EVENT_TOUCH_START, x, y, 100, 660, 580, 150);
     s->frame_counter += 1;
+    s->touch_down = true;
+}
+
+void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s, float x, float y) { 
+    printf("On release!\n");   
+    s->next_frame = get_frame(s, MT_EVENT_TOUCH_ENDED, 0, 0, 0, 0, 0, 0);
+    s->frame_counter += 1;
+    s->touch_down = false;
 }
 
 static void ipod_touch_multitouch_realize(SSIPeripheral *d, Error **errp)

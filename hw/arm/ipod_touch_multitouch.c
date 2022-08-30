@@ -98,7 +98,9 @@ static void prepare_short_control_response(IPodTouchMultitouchState *s, uint8_t 
         s->out_buffer[3] = MT_SENSOR_REGION_PARAM;
     }
     else if(report_id == MT_REPORT_SENSOR_DIMENSIONS) {
-        // TODO fill in correctly
+        uint32_t *ob_int32 = (uint32_t *)&s->out_buffer[3];
+        ob_int32[0] = MT_SENSOR_SURFACE_WIDTH;
+        ob_int32[1] = MT_SENSOR_SURFACE_HEIGHT;
     }
     else {
         hw_error("Unknown report ID 0x%02x\n", report_id);

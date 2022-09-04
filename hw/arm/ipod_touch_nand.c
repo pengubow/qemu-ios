@@ -175,8 +175,8 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 
                 // flush the page buffer to the disk
                 uint32_t vpn = s->buffered_page * 8 + s->buffered_bank;
-                printf("Flushing page %d, bank %d, vpn %d\n", s->buffered_page, s->buffered_bank, vpn);
-                printf("INIT? %d, pb: %d\n", s->lock.initialized, s->page_buffer);
+                //printf("Flushing page %d, bank %d, vpn %d\n", s->buffered_page, s->buffered_bank, vpn);
+                //printf("INIT? %d, pb: %d\n", s->lock.initialized, s->page_buffer);
                 qemu_mutex_lock(&s->lock);
                 qemu_mutex_unlock(&s->lock);
                 // if(vpn >= FILESYSTEM_START_VPN && vpn < (FILESYSTEM_START_VPN + FILESYSTEM_NUM_PAGES)) {

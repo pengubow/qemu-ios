@@ -81,58 +81,6 @@ static void ipod_touch_cpu_reset(void *opaque)
 }
 
 /*
-CLOCK
-*/
-
-static void s5l8900_clock1_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
-{
-    s5l8900_clk1_s *s = (struct s5l8900_clk1_s *) opaque;
-
-    switch (addr) {
-        case CLOCK1_PLLLOCK:
-            s->plllock = val;
-            break;
-      default:
-            break;
-    }
-}
-
-static uint64_t s5l8900_clock1_read(void *opaque, hwaddr addr, unsigned size)
-{
-    s5l8900_clk1_s *s = (struct s5l8900_clk1_s *) opaque;
-
-    switch (addr) {
-        case CLOCK1_CONFIG0:
-            return s->config0;
-        case CLOCK1_CONFIG1:
-            return s->config1;
-        case CLOCK1_CONFIG2:
-            return s->config2;
-        case CLOCK1_PLL0CON:
-            return s->pll0con;
-        case CLOCK1_PLL1CON:
-            return s->pll1con;
-        case CLOCK1_PLL2CON:
-            return s->pll2con;
-        case CLOCK1_PLL3CON:
-            return s->pll3con;
-        case CLOCK1_PLLLOCK:
-            return s->plllock;
-        case CLOCK1_PLLMODE:
-            return 0x000a003a; // extracted from iPod Touch
-      default:
-            break;
-    }
-    return 0;
-}
-
-static const MemoryRegionOps clock1_ops = {
-    .read = s5l8900_clock1_read,
-    .write = s5l8900_clock1_write,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-};
-
-/*
 USB PHYS
 */
 static uint64_t s5l8900_usb_phys_read(void *opaque, hwaddr addr, unsigned size)
@@ -226,54 +174,6 @@ static const MemoryRegionOps mbx_ops = {
     .write = s5l8900_mbx_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
-
-static void ipod_touch_init_clock(MachineState *machine, MemoryRegion *sysmem)
-{
-    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
-    nms->clock1 = (s5l8900_clk1_s *) g_malloc0(sizeof(struct s5l8900_clk1_s));
-    nms->clock1->plllock = 1 | 2 | 4 | 8;
-
-    uint64_t config0 = 0x0;
-    config0 |= (1 << 12); // set the clock PPL to index 1
-    config0 |= (1 << 24); // indicate that we have a memory divisor
-    config0 |= (2 << 16); // set the memory divisor to two
-    nms->clock1->config0 = config0;
-
-    uint64_t config1 = 0x0;
-    config1 |= (1 << 12); // set the bus PPL to index 1
-    config1 |= (1 << 24); // indicate that we have a bus divisor
-    config1 |= (3 << 16); // set the bus divisor to three
-    config1 |= (1 << 8);  // indicate that unknown has a divisor
-    config1 |= 3;         // set the unknown divisor 1 to 3
-    config1 |= (0 << 4);  // set the unknown divisor 2 to 0
-    config1 |= (1 << 20); // set the peripheral factor to 1
-
-    config1 |= (1 << 14); // unknown
-    config1 |= (1 << 28); // set some PPL index to 1
-    config1 |= (1 << 30); // unknown
-    nms->clock1->config1 = config1;
-
-    uint64_t config2 = 0x0;
-    config2 |= (3 << 28); // set the peripheral PPL to index 3
-    config2 |= (1 << 24); // indicate that the display has a divisor
-    config2 |= (1 << 16); // set the display divisor to 1
-    nms->clock1->config2 = config2;
-
-    // set the PLL configurations (MDIV, PDIV, SDIV)
-    nms->clock1->pll0con = (80 << 8) | (8 << 24) | 0;
-    nms->clock1->pll1con = (103 << 8) | (6 << 24) | 0;
-    nms->clock1->pll2con = (156 << 8) | (53 << 24) | 2;
-    nms->clock1->pll3con = (72 << 8) | (8 << 24) | 1;
-
-    // TODO same as clock1 for now
-    MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(nms), &clock1_ops, nms->clock1, "clock0", 0x1000);
-    memory_region_add_subregion(sysmem, CLOCK0_MEM_BASE, iomem);
-
-    iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(nms), &clock1_ops, nms->clock1, "clock1", 0x1000);
-    memory_region_add_subregion(sysmem, CLOCK1_MEM_BASE, iomem);
-}
 
 static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem, AddressSpace *nsas)
 {
@@ -390,8 +290,17 @@ static void ipod_touch_machine_init(MachineState *machine)
     // // chain VICs together
     nms->vic1->daisy = nms->vic0;
 
-    // init clock
-    ipod_touch_init_clock(machine, sysmem);
+    // init clock 0
+    dev = qdev_new("ipodtouch.clock");
+    IPodTouchClockState *clock0_state = IPOD_TOUCH_CLOCK(dev);
+    nms->clock0 = clock0_state;
+    memory_region_add_subregion(sysmem, CLOCK0_MEM_BASE, &clock0_state->iomem);
+
+    // init clock 1
+    dev = qdev_new("ipodtouch.clock");
+    IPodTouchClockState *clock1_state = IPOD_TOUCH_CLOCK(dev);
+    nms->clock1 = clock1_state;
+    memory_region_add_subregion(sysmem, CLOCK1_MEM_BASE, &clock1_state->iomem);
 
     // init the timer
     dev = qdev_new("ipodtouch.timer");

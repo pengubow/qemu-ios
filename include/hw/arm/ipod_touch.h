@@ -7,6 +7,7 @@
 #include "hw/arm/boot.h"
 #include "hw/intc/pl192.h"
 #include "hw/arm/ipod_touch_timer.h"
+#include "hw/arm/ipod_touch_clock.h"
 #include "hw/arm/ipod_touch_spi.h"
 #include "hw/arm/ipod_touch_aes.h"
 #include "hw/arm/ipod_touch_sha1.h"
@@ -28,16 +29,6 @@
 #define TYPE_IPOD_TOUCH_MACHINE   MACHINE_TYPE_NAME(TYPE_IPOD_TOUCH)
 #define IPOD_TOUCH_MACHINE(obj) \
     OBJECT_CHECK(IPodTouchMachineState, (obj), TYPE_IPOD_TOUCH_MACHINE)
-
-#define CLOCK1_CONFIG0 0x0
-#define CLOCK1_CONFIG1 0x4
-#define CLOCK1_CONFIG2 0x8
-#define CLOCK1_PLL0CON 0x20
-#define CLOCK1_PLL1CON 0x24
-#define CLOCK1_PLL2CON 0x28
-#define CLOCK1_PLL3CON 0x2C
-#define CLOCK1_PLLLOCK 0x40
-#define CLOCK1_PLLMODE 0x44
 
 // VIC
 #define S5L8900_VIC_N	  2
@@ -131,19 +122,6 @@ typedef struct {
     MachineClass parent;
 } IPodTouchMachineClass;
 
-typedef struct s5l8900_clk1_s
-{
-	uint32_t	config0;
-    uint32_t    config1;
-    uint32_t    config2;
-    uint32_t    pll0con;
-	uint32_t    pll1con;
-    uint32_t    pll2con;
-    uint32_t    pll3con;
-	uint32_t    plllock;
-
-} s5l8900_clk1_s;
-
 typedef struct s5l8900_usb_phys_s
 {
 	uint32_t usb_ophypwr;
@@ -159,7 +137,8 @@ typedef struct {
 	PL192State *vic0;
 	PL192State *vic1;
 	synopsys_usb_state *usb_otg;
-	s5l8900_clk1_s *clock1;
+	IPodTouchClockState *clock0;
+	IPodTouchClockState *clock1;
 	IPodTouchTimerState *timer1;
 	IPodTouchSYSICState *sysic;
 	S5L8900SPIState *spi2_state;

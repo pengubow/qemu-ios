@@ -80,9 +80,6 @@ static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned 
 
         case 0x14:
             s->unknown1 = val;
-            if(val & 1) {
-                qemu_irq_raise(s->irq);
-            }
             break;
         case 0x18:
             s->unknown2 = val;
@@ -234,18 +231,24 @@ static void ipod_touch_lcd_mouse_event(void *opaque, int x, int y, int z, int bu
     float fy = y / pow(2, 15);
 
     IPodTouchLCDState *lcd = (IPodTouchLCDState *) opaque;
-    if(buttons_state) {
+    lcd->mt->touch_x = fx;
+    lcd->mt->touch_y = fy;
+
+    if(buttons_state && !lcd->mt->touch_down) {
         ipod_touch_multitouch_on_touch(lcd->mt, fx, fy);
-        lcd->sysic->gpio_int_status[4] |= (1 << 27);
-        qemu_irq_raise(lcd->sysic->gpio_irqs[4]);
     }
-    else {
-        if(lcd->mt->touch_down) {
-            ipod_touch_multitouch_on_release(lcd->mt, fx, fy);
-            lcd->sysic->gpio_int_status[4] |= (1 << 27);
-            qemu_irq_raise(lcd->sysic->gpio_irqs[4]);
-        }
+    else if(!buttons_state && lcd->mt->touch_down) {
+        ipod_touch_multitouch_on_release(lcd->mt, fx, fy);
     }
+}
+
+static void refresh_timer_tick(void *opaque)
+{
+    IPodTouchLCDState *s = (IPodTouchLCDState *)opaque;
+
+    qemu_irq_raise(s->irq);
+
+    timer_mod(s->refresh_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + NANOSECONDS_PER_SECOND / LCD_REFRESH_RATE_FREQUENCY);
 }
 
 static void s5l8900_lcd_realize(DeviceState *dev, Error **errp)
@@ -256,6 +259,10 @@ static void s5l8900_lcd_realize(DeviceState *dev, Error **errp)
 
     // add mouse handler
     qemu_add_mouse_event_handler(ipod_touch_lcd_mouse_event, s, 1, "iPod Touch Touchscreen");
+
+    // initialize the refresh timer
+    s->refresh_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, refresh_timer_tick, s);
+    timer_mod(s->refresh_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + NANOSECONDS_PER_SECOND / LCD_REFRESH_RATE_FREQUENCY);
 }
 
 static void s5l8900_lcd_init(Object *obj)

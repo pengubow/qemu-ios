@@ -115,6 +115,8 @@ const int S5L8900_GPIO_IRQS[7] = { S5L8900_GPIO_G0_IRQ, S5L8900_GPIO_G1_IRQ, S5L
 #define TVOUT1_MEM_BASE 0x39100000
 #define TVOUT2_MEM_BASE 0x39200000
 #define TVOUT3_MEM_BASE 0x39300000
+#define MPVD_MEM_BASE 0x39600000
+#define H264BPD_MEM_BASE 0x39800000
 
 #define TVOUT_WORKAROUND_MEM_BASE 0x8a25960  // workaround for TV Out, to make sure that it can be correctly deallocated without reverse engineering the entire TVOut protocol
 

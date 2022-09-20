@@ -8,6 +8,7 @@
 #include "qapi/error.h"
 #include "hw/hw.h"
 #include "hw/ssi/ssi.h"
+#include "hw/arm/ipod_touch_sysic.h"
 
 #define TYPE_IPOD_TOUCH_MULTITOUCH                "ipodtouch.multitouch"
 OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchMultitouchState, IPOD_TOUCH_MULTITOUCH)
@@ -56,6 +57,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchMultitouchState, IPOD_TOUCH_MULTITOUCH)
 #define MT_FRAME_TYPE_PATH 0x44
 
 // frame event types
+#define MT_EVENT_TOUCH_FULL_END 0x0
 #define MT_EVENT_TOUCH_START 0x3
 #define MT_EVENT_TOUCH_MOVED 0x4
 #define MT_EVENT_TOUCH_ENDED 0x7
@@ -141,6 +143,11 @@ typedef struct IPodTouchMultitouchState {
     MTFrame *next_frame;
     uint32_t frame_counter;
     bool touch_down;
+    QEMUTimer *touch_timer;
+    QEMUTimer *touch_end_timer;
+    IPodTouchSYSICState *sysic;
+    float touch_x;
+    float touch_y;
 } IPodTouchMultitouchState;
 
 void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float y);

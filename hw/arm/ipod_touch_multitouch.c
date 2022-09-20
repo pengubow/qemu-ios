@@ -194,6 +194,7 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
             s->buf_size = 16;
         }
         else if(value == MT_CMD_FRAME_READ) {
+            printf("Will read frame!\n");
             s->buf_size = sizeof(MTFrame);
             free(s->out_buffer);
             s->out_buffer = (uint8_t *) s->next_frame;
@@ -297,7 +298,8 @@ static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, f
     frame->frame_packet.header.type = MT_FRAME_TYPE_PATH;
     frame->frame_packet.header.frameNum = s->frame_counter;
     frame->frame_packet.header.headerLen = sizeof(MTFrameHeader);
-    frame->frame_packet.header.timestamp = s->frame_counter * 16; // TODO for now
+    uint64_t elapsed_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) / 1000000;
+    frame->frame_packet.header.timestamp = elapsed_ns;
     frame->frame_packet.header.numFingers = 1;
     frame->frame_packet.header.fingerDataLen = sizeof(FingerData);
 
@@ -308,6 +310,7 @@ static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, f
     frame->finger_data.radius1 = radius1;
     frame->finger_data.radius2 = radius2;
     frame->finger_data.radius3 = radius3;
+    frame->finger_data.angle = 19317;
     frame->finger_data.contactDensity = contactDensity; // seems to be a medium press
 
     // compute the checksum over the frame data.
@@ -318,28 +321,64 @@ static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, f
     frame->checksum1 = (checksum & 0xFF);
     frame->checksum2 = (checksum >> 8) & 0xFF;
 
+    s->frame_counter += 1;
+
     return frame;
+}
+
+static void ipod_touch_multitouch_inform_frame_ready(IPodTouchMultitouchState *s) {
+    s->sysic->gpio_int_status[4] |= (1 << 27);
+    qemu_irq_raise(s->sysic->gpio_irqs[4]);
 }
 
 void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float y) {
     printf("On touch!\n");
-    // we received a touch event. Add a packet to the buffer.
-    s->next_frame = get_frame(s, MT_EVENT_TOUCH_START, x, y, 100, 660, 580, 150);
-    s->frame_counter += 1;
     s->touch_down = true;
+
+    s->next_frame = get_frame(s, MT_EVENT_TOUCH_START, x, y, 100, 660, 580, 150);
+    ipod_touch_multitouch_inform_frame_ready(s);
+
+    timer_mod(s->touch_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + NANOSECONDS_PER_SECOND / 10);
 }
 
 void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s, float x, float y) { 
     printf("On release!\n");   
-    s->next_frame = get_frame(s, MT_EVENT_TOUCH_ENDED, 0, 0, 0, 0, 0, 0);
-    s->frame_counter += 1;
+    s->next_frame = get_frame(s, MT_EVENT_TOUCH_ENDED, s->touch_x, s->touch_y, 0, 0, 0, 0);
     s->touch_down = false;
+    ipod_touch_multitouch_inform_frame_ready(s);
+
+    timer_del(s->touch_timer);
+    timer_mod(s->touch_end_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + NANOSECONDS_PER_SECOND / 10);
+}
+
+static void touch_timer_tick(void *opaque)
+{
+    IPodTouchMultitouchState *s = (IPodTouchMultitouchState *)opaque;
+    printf("On touch timer tick!\n");
+
+    s->next_frame = get_frame(s, MT_EVENT_TOUCH_MOVED, s->touch_x, s->touch_y, 100, 660, 580, 150);
+    ipod_touch_multitouch_inform_frame_ready(s);
+
+    if(s->touch_down) {
+        // reschedule the timer
+        timer_mod(s->touch_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + NANOSECONDS_PER_SECOND / 10);
+    }
+}
+
+static void touch_end_timer_tick(void *opaque)
+{
+    IPodTouchMultitouchState *s = (IPodTouchMultitouchState *)opaque;
+    s->next_frame = get_frame(s, MT_EVENT_TOUCH_FULL_END, s->touch_x, s->touch_y, 0, 0, 0, 0);
+    s->touch_down = false;
+    ipod_touch_multitouch_inform_frame_ready(s);
 }
 
 static void ipod_touch_multitouch_realize(SSIPeripheral *d, Error **errp)
 {
     IPodTouchMultitouchState *s = IPOD_TOUCH_MULTITOUCH(d);
     memset(s->hbpp_atn_ack_response, 0, 2);
+    s->touch_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, touch_timer_tick, s);
+    s->touch_end_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, touch_end_timer_tick, s);
 }
 
 static void ipod_touch_multitouch_class_init(ObjectClass *klass, void *data)

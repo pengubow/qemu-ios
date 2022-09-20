@@ -18,25 +18,21 @@ static uint64_t ipod_touch_sysic_read(void *opaque, hwaddr addr, unsigned size)
             return 1;
         case GPIO_INTLEVEL ... (GPIO_INTLEVEL + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: offset = 0x%08x\n", __func__, addr);
             uint8_t group = (addr - GPIO_INTLEVEL) / 4;
             return s->gpio_int_level[group];
         }
         case GPIO_INTSTAT ... (GPIO_INTSTAT + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: offset = 0x%08x\n", __func__, addr);
             uint8_t group = (addr - GPIO_INTSTAT) / 4;
             return s->gpio_int_status[group];
         }
         case GPIO_INTEN ... (GPIO_INTEN + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: offset = 0x%08x\n", __func__, addr);
             uint8_t group = (addr - GPIO_INTEN) / 4;
             return s->gpio_int_enabled[group];
         }
         case GPIO_INTTYPE ... (GPIO_INTTYPE + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: offset = 0x%08x\n", __func__, addr);
             uint8_t group = (addr - GPIO_INTTYPE) / 4;
             return s->gpio_int_type[group];
         }
@@ -62,20 +58,14 @@ static void ipod_touch_sysic_write(void *opaque, hwaddr addr, uint64_t val, unsi
             break;
         case GPIO_INTLEVEL ... (GPIO_INTLEVEL + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
-            uint8_t group = (addr - GPIO_INTLEVEL) / 4;
-            printf("Writing 0x%08x to group %d (lvl) offset 0x%08x\n", val, group, addr);
             break;
         }
         case GPIO_INTSTAT ... (GPIO_INTSTAT + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
             uint8_t group = (addr - GPIO_INTSTAT) / 4;
 
             // acknowledge the interrupts and clear the corresponding bits
-            printf("GPIO INT stat before clearing: 0x%08x\n", s->gpio_int_status[group]);
             s->gpio_int_status[group] = s->gpio_int_status[group] & ~val;
-            printf("GPIO INT stat after clearing: 0x%08x\n", s->gpio_int_status[group]);
 
             qemu_irq_lower(s->gpio_irqs[group]);
 
@@ -83,14 +73,12 @@ static void ipod_touch_sysic_write(void *opaque, hwaddr addr, uint64_t val, unsi
         }
         case GPIO_INTEN ... (GPIO_INTEN + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
             uint8_t group = (addr - GPIO_INTEN) / 4;
             s->gpio_int_enabled[group] = val;
             break;
         }
         case GPIO_INTTYPE ... (GPIO_INTTYPE + GPIO_NUMINTGROUPS * 4):
         {
-            fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
             uint8_t group = (addr - GPIO_INTTYPE) / 4;
             s->gpio_int_type[group] = val;
             break;
@@ -108,7 +96,6 @@ static const MemoryRegionOps ipod_touch_sysic_ops = {
 
 static void ipod_touch_sysic_init(Object *obj)
 {
-    DeviceState *dev = DEVICE(obj);
     IPodTouchSYSICState *s = IPOD_TOUCH_SYSIC(obj);
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
 
@@ -121,7 +108,7 @@ static void ipod_touch_sysic_init(Object *obj)
 
 static void ipod_touch_sysic_class_init(ObjectClass *klass, void *data)
 {
-    DeviceClass *dc = DEVICE_CLASS(klass);
+    
 }
 
 static const TypeInfo ipod_touch_sysic_type_info = {

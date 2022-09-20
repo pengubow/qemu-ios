@@ -7,11 +7,12 @@
 #include "qemu/timer.h"
 #include "hw/sysbus.h"
 #include "hw/irq.h"
-#include "hw/arm/ipod_touch_sysic.h"
 #include "hw/arm/ipod_touch_multitouch.h"
 
 #define TYPE_IPOD_TOUCH_LCD                "ipodtouch.lcd"
 OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchLCDState, IPOD_TOUCH_LCD)
+
+#define LCD_REFRESH_RATE_FREQUENCY 10
 
 typedef struct IPodTouchLCDState
 {
@@ -20,7 +21,6 @@ typedef struct IPodTouchLCDState
     MemoryRegion iomem;
     QemuConsole *con;
     IPodTouchMultitouchState *mt;
-    IPodTouchSYSICState *sysic;
     int invalidate;
     MemoryRegionSection fbsection;
     qemu_irq irq;
@@ -50,6 +50,8 @@ typedef struct IPodTouchLCDState
     uint32_t w2_display_resolution_info;
     uint32_t w2_display_depth_info;
     uint32_t w2_qlen;
+
+    QEMUTimer *refresh_timer;
 } IPodTouchLCDState;
 
 #endif

@@ -223,6 +223,8 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "sdio", SDIO_MEM_BASE, 4096);
+    allocate_ram(sysmem, "mpvd", MPVD_MEM_BASE, 0x70000);
+    allocate_ram(sysmem, "h264bpd", H264BPD_MEM_BASE, 4096);
 
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
 
@@ -363,6 +365,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     set_spi_base(2);
     dev = sysbus_create_simple("s5l8900spi", SPI2_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI2_IRQ));
     S5L8900SPIState *spi2_state = S5L8900SPI(dev);
+    spi2_state->mt->sysic = sysic_state;
     nms->spi2_state = spi2_state;
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
@@ -371,7 +374,6 @@ static void ipod_touch_machine_init(MachineState *machine)
     dev = qdev_new("ipodtouch.lcd");
     IPodTouchLCDState *lcd_state = IPOD_TOUCH_LCD(dev);
     lcd_state->sysmem = sysmem;
-    lcd_state->sysic = sysic_state;
     lcd_state->mt = spi2_state->mt;
     nms->lcd_state = lcd_state;
     busdev = SYS_BUS_DEVICE(dev);

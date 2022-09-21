@@ -228,7 +228,7 @@ static void ipod_touch_lcd_mouse_event(void *opaque, int x, int y, int z, int bu
 
     // convert x and y to fractional numbers
     float fx = x / pow(2, 15);
-    float fy = y / pow(2, 15);
+    float fy = 1 - y / pow(2, 15);
 
     IPodTouchLCDState *lcd = (IPodTouchLCDState *) opaque;
     lcd->mt->touch_x = fx;

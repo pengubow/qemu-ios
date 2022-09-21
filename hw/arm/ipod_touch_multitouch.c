@@ -304,7 +304,10 @@ static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, f
     frame->frame_packet.header.fingerDataLen = sizeof(FingerData);
 
     // create the finger data
+    frame->finger_data.id = 1;
     frame->finger_data.event = event;
+    frame->finger_data.unk_2 = 2;
+    frame->finger_data.unk_3 = 1;
     frame->finger_data.x = (int)(x * MT_INTERNAL_SENSOR_SURFACE_WIDTH);
     frame->finger_data.y = (int)(y * MT_INTERNAL_SENSOR_SURFACE_HEIGHT);
     frame->finger_data.radius1 = radius1;

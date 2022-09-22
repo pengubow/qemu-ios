@@ -215,7 +215,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     //  }
 
     allocate_ram(sysmem, "edgeic", EDGEIC_MEM_BASE, 0x1000);
-    allocate_ram(sysmem, "gpio", GPIO_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "watchdog", WATCHDOG_MEM_BASE, align_64k_high(0x1));
 
     allocate_ram(sysmem, "iis0", IIS0_MEM_BASE, align_64k_high(0x1));
@@ -257,6 +256,47 @@ static uint32_t s5l8900_usb_hwcfg[] = {
     0x082000e8,
     0x01f08024
 };
+
+static void ipod_touch_key_event(void *opaque, int keycode)
+{
+    bool do_irq = false;
+    int gpio_group = 0, gpio_selector = 0;
+
+    IPodTouchMultitouchState *s = (IPodTouchMultitouchState *)opaque;
+    if(keycode == 25 || keycode == 153) {
+        // power button
+        gpio_group = GPIO_BUTTON_POWER_IRQ / NUM_GPIO_PINS;
+        gpio_selector = GPIO_BUTTON_POWER_IRQ % NUM_GPIO_PINS;
+        
+        if(keycode == 25 && (s->gpio_state->gpio_state & (1 << (GPIO_BUTTON_POWER & 0xf))) == 0) {
+            s->gpio_state->gpio_state |= (1 << (GPIO_BUTTON_POWER & 0xf));
+            do_irq = true;
+        }
+        else if(keycode == 153) {
+            s->gpio_state->gpio_state &= ~(1 << (GPIO_BUTTON_POWER & 0xf));
+            do_irq = true;
+        }
+    }
+    else if(keycode == 35 || keycode == 163) {
+        // home button
+        gpio_group = GPIO_BUTTON_HOME_IRQ / NUM_GPIO_PINS;
+        gpio_selector = GPIO_BUTTON_HOME_IRQ % NUM_GPIO_PINS;
+
+        if(keycode == 35 && (s->gpio_state->gpio_state & (1 << (GPIO_BUTTON_HOME & 0xf))) == 0) {
+            s->gpio_state->gpio_state |= (1 << (GPIO_BUTTON_HOME & 0xf));
+            do_irq = true;
+        }
+        else if(keycode == 163) {
+            s->gpio_state->gpio_state &= ~(1 << (GPIO_BUTTON_HOME & 0xf));
+            do_irq = true;
+        }
+    }
+    
+    if(do_irq) {
+        s->sysic->gpio_int_status[gpio_group] |= (1 << gpio_selector);
+        qemu_irq_raise(s->sysic->gpio_irqs[gpio_group]);
+    }
+}
 
 static void ipod_touch_machine_init(MachineState *machine)
 {
@@ -323,7 +363,19 @@ static void ipod_touch_machine_init(MachineState *machine)
         sysbus_connect_irq(busdev, grp, s5l8900_get_irq(nms, S5L8900_GPIO_IRQS[grp]));
     }
 
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G0_IRQ));
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G1_IRQ));
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G2_IRQ));
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G3_IRQ));
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G4_IRQ));
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G5_IRQ));
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_GPIO_G6_IRQ));
+
+    // init GPIO
+    dev = qdev_new("ipodtouch.gpio");
+    IPodTouchGPIOState *gpio_state = IPOD_TOUCH_GPIO(dev);
+    nms->gpio_state = gpio_state;
+    memory_region_add_subregion(sysmem, GPIO_MEM_BASE, &gpio_state->iomem);
 
     dev = exynos4210_uart_create(UART0_MEM_BASE, 256, 0, serial_hd(0), nms->irq[0][24]);
     if (!dev) {
@@ -366,6 +418,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     dev = sysbus_create_simple("s5l8900spi", SPI2_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI2_IRQ));
     S5L8900SPIState *spi2_state = S5L8900SPI(dev);
     spi2_state->mt->sysic = sysic_state;
+    spi2_state->mt->gpio_state = gpio_state;
     nms->spi2_state = spi2_state;
 
     ipod_touch_memory_setup(machine, sysmem, nsas);
@@ -538,6 +591,8 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, TVOUT_WORKAROUND_MEM_BASE, iomem);
 
     qemu_register_reset(ipod_touch_cpu_reset, nms);
+
+    qemu_add_kbd_event_handler(ipod_touch_key_event, spi2_state->mt);
 }
 
 static void ipod_touch_machine_class_init(ObjectClass *klass, void *data)

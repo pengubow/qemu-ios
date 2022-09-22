@@ -3,6 +3,7 @@
 
 #include "qemu-common.h"
 #include "exec/hwaddr.h"
+#include "ui/console.h"
 #include "hw/boards.h"
 #include "hw/arm/boot.h"
 #include "hw/intc/pl192.h"
@@ -21,6 +22,7 @@
 #include "hw/arm/ipod_touch_chipid.h"
 #include "hw/arm/ipod_touch_tvout.h"
 #include "hw/arm/ipod_touch_lcd.h"
+#include "hw/arm/ipod_touch_gpio.h"
 #include "hw/i2c/ipod_touch_i2c.h"
 #include "cpu.h"
 
@@ -157,6 +159,7 @@ typedef struct {
 	IPodTouchTVOutState *tvout2_state;
 	IPodTouchTVOutState *tvout3_state;
 	IPodTouchLCDState *lcd_state;
+	IPodTouchGPIOState *gpio_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

@@ -330,12 +330,11 @@ static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, f
 }
 
 static void ipod_touch_multitouch_inform_frame_ready(IPodTouchMultitouchState *s) {
-    s->sysic->gpio_int_status[4] |= (1 << 27);
+    s->sysic->gpio_int_status[4] |= (1 << 27); // the multitouch interrupt bit is in group 4 (32 interrupts per group), and the 27th of the 4th group
     qemu_irq_raise(s->sysic->gpio_irqs[4]);
 }
 
 void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float y) {
-    printf("On touch!\n");
     s->touch_down = true;
 
     s->next_frame = get_frame(s, MT_EVENT_TOUCH_START, x, y, 100, 660, 580, 150);
@@ -345,7 +344,6 @@ void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float 
 }
 
 void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s, float x, float y) { 
-    printf("On release!\n");   
     s->next_frame = get_frame(s, MT_EVENT_TOUCH_ENDED, s->touch_x, s->touch_y, 0, 0, 0, 0);
     s->touch_down = false;
     ipod_touch_multitouch_inform_frame_ready(s);
@@ -357,7 +355,6 @@ void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s, float x, floa
 static void touch_timer_tick(void *opaque)
 {
     IPodTouchMultitouchState *s = (IPodTouchMultitouchState *)opaque;
-    printf("On touch timer tick!\n");
 
     s->next_frame = get_frame(s, MT_EVENT_TOUCH_MOVED, s->touch_x, s->touch_y, 100, 660, 580, 150);
     ipod_touch_multitouch_inform_frame_ready(s);

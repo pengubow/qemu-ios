@@ -9,6 +9,7 @@
 #include "hw/hw.h"
 #include "hw/ssi/ssi.h"
 #include "hw/arm/ipod_touch_sysic.h"
+#include "hw/arm/ipod_touch_gpio.h"
 
 #define TYPE_IPOD_TOUCH_MULTITOUCH                "ipodtouch.multitouch"
 OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchMultitouchState, IPOD_TOUCH_MULTITOUCH)
@@ -146,6 +147,7 @@ typedef struct IPodTouchMultitouchState {
     QEMUTimer *touch_timer;
     QEMUTimer *touch_end_timer;
     IPodTouchSYSICState *sysic;
+    IPodTouchGPIOState *gpio_state;
     float touch_x;
     float touch_y;
 } IPodTouchMultitouchState;

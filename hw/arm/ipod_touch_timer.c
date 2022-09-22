@@ -84,7 +84,7 @@ static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
     switch (addr) {
         case TIMER_TICKSHIGH:    // needs to be fixed so that read from low first works as well
 
-            elapsed_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+            elapsed_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) / 2; // the timer ticks twice as slow as the CPU frequency in the kernel
             ticks = clock_ns_to_ticks(s->sysclk, elapsed_ns);
             //printf("TICKS: %lld\n", ticks);
             s->ticks_high = (ticks >> 32);

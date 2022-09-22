@@ -45,7 +45,7 @@ static uint8_t pcf50633_recv(I2CSlave *i2c)
             res = int_to_bcd(tm.tm_mday);
             break;
         case PMU_RTCMT:  // month
-            res = int_to_bcd(tm.tm_mon);
+            res = int_to_bcd(tm.tm_mon + 1);
             break;
         case PMU_RTCYR:  // year
             res = int_to_bcd(tm.tm_year - 100); // the year counts from 1900

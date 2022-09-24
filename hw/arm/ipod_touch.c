@@ -221,7 +221,6 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis1", IIS1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
 
-    allocate_ram(sysmem, "sdio", SDIO_MEM_BASE, 4096);
     allocate_ram(sysmem, "mpvd", MPVD_MEM_BASE, 0x70000);
     allocate_ram(sysmem, "h264bpd", H264BPD_MEM_BASE, 4096);
 
@@ -376,6 +375,12 @@ static void ipod_touch_machine_init(MachineState *machine)
     IPodTouchGPIOState *gpio_state = IPOD_TOUCH_GPIO(dev);
     nms->gpio_state = gpio_state;
     memory_region_add_subregion(sysmem, GPIO_MEM_BASE, &gpio_state->iomem);
+
+    // init SDIO
+    dev = qdev_new("ipodtouch.sdio");
+    IPodTouchSDIOState *sdio_state = IPOD_TOUCH_SDIO(dev);
+    nms->sdio_state = sdio_state;
+    memory_region_add_subregion(sysmem, SDIO_MEM_BASE, &sdio_state->iomem);
 
     dev = exynos4210_uart_create(UART0_MEM_BASE, 256, 0, serial_hd(0), nms->irq[0][24]);
     if (!dev) {

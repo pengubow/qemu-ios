@@ -23,6 +23,7 @@
 #include "hw/arm/ipod_touch_tvout.h"
 #include "hw/arm/ipod_touch_lcd.h"
 #include "hw/arm/ipod_touch_gpio.h"
+#include "hw/arm/ipod_touch_sdio.h"
 #include "hw/i2c/ipod_touch_i2c.h"
 #include "cpu.h"
 
@@ -160,6 +161,7 @@ typedef struct {
 	IPodTouchTVOutState *tvout3_state;
 	IPodTouchLCDState *lcd_state;
 	IPodTouchGPIOState *gpio_state;
+	IPodTouchSDIOState *sdio_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;

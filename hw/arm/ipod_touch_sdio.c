@@ -1,5 +1,14 @@
 #include "hw/arm/ipod_touch_sdio.h"
 
+void sdio_exec_cmd(IPodTouchSDIOState *s)
+{
+    uint32_t addr = (s->arg >> 9) & 0x1ffff;
+    if(addr == (1 << 8)) {
+        // reading slot 1 - make sure there is a device here
+        s->resp0 = 1;
+    }
+}
+
 static void ipod_touch_sdio_write(void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
     fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, value, addr);
@@ -9,6 +18,9 @@ static void ipod_touch_sdio_write(void *opaque, hwaddr addr, uint64_t value, uns
     switch(addr) {
         case SDIO_CMD:
             s->cmd = value;
+            if(value & (1 << 31)) {
+                sdio_exec_cmd(s);
+            }
             break;
         case SDIO_ARGU:
             s->arg = value;
@@ -37,6 +49,14 @@ static uint64_t ipod_touch_sdio_read(void *opaque, hwaddr addr, unsigned size)
             return s->arg;
         case SDIO_DSTA:
             return (1 << 0) | (1 << 4) ; // 0x1 indicates that the SDIO is ready for a CMD, (1 << 4) that the command is complete
+        case SDIO_RESP0:
+            return s->resp0;
+        case SDIO_RESP1:
+            return s->resp1;
+        case SDIO_RESP2:
+            return s->resp2;
+        case SDIO_RESP3:
+            return s->resp3;
         case SDIO_CSR:
             return s->csr;
         case SDIO_IRQMASK:

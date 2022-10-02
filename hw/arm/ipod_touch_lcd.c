@@ -231,14 +231,16 @@ static void ipod_touch_lcd_mouse_event(void *opaque, int x, int y, int z, int bu
     float fy = 1 - y / pow(2, 15);
 
     IPodTouchLCDState *lcd = (IPodTouchLCDState *) opaque;
+    lcd->mt->prev_touch_x = lcd->mt->touch_x;
+    lcd->mt->prev_touch_y = lcd->mt->touch_y;
     lcd->mt->touch_x = fx;
     lcd->mt->touch_y = fy;
 
     if(buttons_state && !lcd->mt->touch_down) {
-        ipod_touch_multitouch_on_touch(lcd->mt, fx, fy);
+        ipod_touch_multitouch_on_touch(lcd->mt);
     }
     else if(!buttons_state && lcd->mt->touch_down) {
-        ipod_touch_multitouch_on_release(lcd->mt, fx, fy);
+        ipod_touch_multitouch_on_release(lcd->mt);
     }
 }
 

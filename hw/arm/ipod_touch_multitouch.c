@@ -308,6 +308,13 @@ static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, f
     frame->finger_data.event = event;
     frame->finger_data.unk_2 = 2;
     frame->finger_data.unk_3 = 1;
+
+    // compute the velocity
+    int diff_x = (int)((x - s->prev_touch_x) * MT_INTERNAL_SENSOR_SURFACE_WIDTH);
+    int diff_y = (int)((x - s->prev_touch_y) * MT_INTERNAL_SENSOR_SURFACE_HEIGHT);
+    frame->finger_data.velX = diff_x / (elapsed_ns - s->last_frame_timestamp) * 1000;
+    frame->finger_data.velY = diff_y / (elapsed_ns - s->last_frame_timestamp) * 1000;
+
     frame->finger_data.x = (int)(x * MT_INTERNAL_SENSOR_SURFACE_WIDTH);
     frame->finger_data.y = (int)(y * MT_INTERNAL_SENSOR_SURFACE_HEIGHT);
     frame->finger_data.radius1 = radius1;
@@ -324,6 +331,7 @@ static MTFrame *get_frame(IPodTouchMultitouchState *s, uint8_t event, float x, f
     frame->checksum1 = (checksum & 0xFF);
     frame->checksum2 = (checksum >> 8) & 0xFF;
 
+    s->last_frame_timestamp = elapsed_ns;
     s->frame_counter += 1;
 
     return frame;
@@ -334,16 +342,16 @@ static void ipod_touch_multitouch_inform_frame_ready(IPodTouchMultitouchState *s
     qemu_irq_raise(s->sysic->gpio_irqs[4]);
 }
 
-void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float y) {
+void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s) {
     s->touch_down = true;
 
-    s->next_frame = get_frame(s, MT_EVENT_TOUCH_START, x, y, 100, 660, 580, 150);
+    s->next_frame = get_frame(s, MT_EVENT_TOUCH_START, s->touch_x, s->touch_y, 100, 660, 580, 150);
     ipod_touch_multitouch_inform_frame_ready(s);
 
     timer_mod(s->touch_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + NANOSECONDS_PER_SECOND / 10);
 }
 
-void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s, float x, float y) { 
+void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s) {
     s->next_frame = get_frame(s, MT_EVENT_TOUCH_ENDED, s->touch_x, s->touch_y, 0, 0, 0, 0);
     s->touch_down = false;
     ipod_touch_multitouch_inform_frame_ready(s);
@@ -379,6 +387,10 @@ static void ipod_touch_multitouch_realize(SSIPeripheral *d, Error **errp)
     memset(s->hbpp_atn_ack_response, 0, 2);
     s->touch_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, touch_timer_tick, s);
     s->touch_end_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, touch_end_timer_tick, s);
+
+    s->prev_touch_x = 0;
+    s->prev_touch_y = 0;
+    s->last_frame_timestamp = 0;
 }
 
 static void ipod_touch_multitouch_class_init(ObjectClass *klass, void *data)

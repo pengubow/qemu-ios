@@ -150,9 +150,12 @@ typedef struct IPodTouchMultitouchState {
     IPodTouchGPIOState *gpio_state;
     float touch_x;
     float touch_y;
+    float prev_touch_x;
+    float prev_touch_y;
+    uint64_t last_frame_timestamp;
 } IPodTouchMultitouchState;
 
-void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s, float x, float y);
-void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s, float x, float y);
+void ipod_touch_multitouch_on_touch(IPodTouchMultitouchState *s);
+void ipod_touch_multitouch_on_release(IPodTouchMultitouchState *s);
 
 #endif

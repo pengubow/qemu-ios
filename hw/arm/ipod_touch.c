@@ -188,7 +188,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     // load the bootrom (vrom)
     uint8_t *file_data = NULL;
     unsigned long fsize;
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/bootrom_s5l8900", (char **)&file_data, &fsize, NULL)) {
+    if (g_file_get_contents(nms->bootrom_path, (char **)&file_data, &fsize, NULL)) {
         allocate_ram(sysmem, "vrom", VROM_MEM_BASE, 0x10000);
         address_space_rw(nsas, VROM_MEM_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     }
@@ -202,7 +202,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
 
     // load iBoot
     file_data = NULL;
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/iboot.bin", (char **)&file_data, &fsize, NULL)) {
+    if (g_file_get_contents(nms->iboot_path, (char **)&file_data, &fsize, NULL)) {
         allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
         address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
      }
@@ -239,9 +239,37 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     }
 }
 
+static char *ipod_touch_get_bootrom_path(Object *obj, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    return g_strdup(nms->bootrom_path);
+}
+
+static void ipod_touch_set_bootrom_path(Object *obj, const char *value, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    g_strlcpy(nms->bootrom_path, value, sizeof(nms->bootrom_path));
+}
+
+static char *ipod_touch_get_iboot_path(Object *obj, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    return g_strdup(nms->iboot_path);
+}
+
+static void ipod_touch_set_iboot_path(Object *obj, const char *value, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    g_strlcpy(nms->iboot_path, value, sizeof(nms->iboot_path));
+}
+
 static void ipod_touch_instance_init(Object *obj)
 {
-	
+	object_property_add_str(obj, "bootrom", ipod_touch_get_bootrom_path, ipod_touch_set_bootrom_path);
+    object_property_set_description(obj, "bootrom", "Path to the S5L8900 bootrom binary");
+
+    object_property_add_str(obj, "iboot", ipod_touch_get_iboot_path, ipod_touch_set_iboot_path);
+    object_property_set_description(obj, "iboot", "Path to the iBoot binary");
 }
 
 static inline qemu_irq s5l8900_get_irq(IPodTouchMachineState *s, int n)
@@ -492,17 +520,25 @@ static void ipod_touch_machine_init(MachineState *machine)
     allocate_ram(sysmem, "8900ops", LLB_BASE, 0x1000);
 
     // patch the instructions related to 8900 decryption
-    uint32_t *data = malloc(8);
+    uint32_t *data = malloc(sizeof(uint32_t) * 2);
     data[0] = 0xe3b00001; // MOVS R0, #1
     data[1] = 0xe12fff1e; // BX LR
-    address_space_rw(nsas, LLB_BASE + 0x80, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 8, 1);
+    address_space_rw(nsas, LLB_BASE + 0x80, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 2, 1);
 
-    // load the decryption logic in memory
-    unsigned long fsize;
-    uint8_t *file_data = NULL;
-    if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/asm/8900.bin", (char **)&file_data, &fsize, NULL)) {
-        address_space_rw(nsas, LLB_BASE + 0x100, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
-    }
+    /*
+    load the decryption logic in memory. These bytes correspond to the following ARMv6 instructions:
+
+        LDR r1,[pc,#0x100]
+        STR r0,[r1]
+        MOVS R0, #1
+        BX lr
+    */
+    data = malloc(sizeof(uint32_t) * 4);
+    data[0] = 0xE59F1100; // LDR r1,[pc,#0x100]
+    data[1] = 0xE5810000; // STR r0,[r1]
+    data[2] = 0xE3B00001; // MOVS R0, #1
+    data[3] = 0xE12FFF1E; // BX lr
+    address_space_rw(nsas, LLB_BASE + 0x100, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 4, 1);
 
     // contains some constants
     data = malloc(4);
@@ -600,9 +636,9 @@ static void ipod_touch_machine_init(MachineState *machine)
     qemu_add_kbd_event_handler(ipod_touch_key_event, spi2_state->mt);
 }
 
-static void ipod_touch_machine_class_init(ObjectClass *klass, void *data)
+static void ipod_touch_machine_class_init(ObjectClass *obj, void *data)
 {
-    MachineClass *mc = MACHINE_CLASS(klass);
+    MachineClass *mc = MACHINE_CLASS(obj);
     mc->desc = "iPod Touch";
     mc->init = ipod_touch_machine_init;
     mc->max_cpus = 1;

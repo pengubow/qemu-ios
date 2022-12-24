@@ -5,7 +5,7 @@ void sdio_exec_cmd(IPodTouchSDIOState *s)
     uint32_t addr = (s->arg >> 9) & 0x1ffff;
     if(addr == (1 << 8)) {
         // reading slot 1 - make sure there is a device here
-        s->resp0 = 1;
+        //s->resp0 = 1;
     }
 }
 

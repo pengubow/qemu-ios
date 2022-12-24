@@ -59,6 +59,7 @@ typedef struct ITNandState {
     uint32_t pages_to_read[512]; // used when in multiple page read mode
     bool is_writing;
     QemuMutex lock;
+    char *nand_path;
 } ITNandState;
 
 void nand_set_buffered_page(ITNandState *s, uint32_t page);

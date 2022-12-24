@@ -263,6 +263,18 @@ static void ipod_touch_set_iboot_path(Object *obj, const char *value, Error **er
     g_strlcpy(nms->iboot_path, value, sizeof(nms->iboot_path));
 }
 
+static char *ipod_touch_get_nand_path(Object *obj, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    return g_strdup(nms->nand_path);
+}
+
+static void ipod_touch_set_nand_path(Object *obj, const char *value, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    g_strlcpy(nms->nand_path, value, sizeof(nms->nand_path));
+}
+
 static void ipod_touch_instance_init(Object *obj)
 {
 	object_property_add_str(obj, "bootrom", ipod_touch_get_bootrom_path, ipod_touch_set_bootrom_path);
@@ -270,6 +282,9 @@ static void ipod_touch_instance_init(Object *obj)
 
     object_property_add_str(obj, "iboot", ipod_touch_get_iboot_path, ipod_touch_set_iboot_path);
     object_property_set_description(obj, "iboot", "Path to the iBoot binary");
+
+    object_property_add_str(obj, "nand", ipod_touch_get_nand_path, ipod_touch_set_nand_path);
+    object_property_set_description(obj, "nand", "Path to the NAND files");
 }
 
 static inline qemu_irq s5l8900_get_irq(IPodTouchMachineState *s, int n)
@@ -487,6 +502,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     // init NAND flash
     dev = qdev_new("itnand");
     ITNandState *nand_state = ITNAND(dev);
+    nand_state->nand_path = &nms->nand_path;
     nms->nand_state = nand_state;
     memory_region_add_subregion(sysmem, NAND_MEM_BASE, &nand_state->iomem);
 

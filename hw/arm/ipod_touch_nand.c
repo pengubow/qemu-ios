@@ -29,32 +29,21 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
     if(bank != s->buffered_bank || page != s->buffered_page) {
         // refresh the buffered page
         uint32_t vpn = page * 8 + bank;
-        // if(vpn >= FILESYSTEM_START_VPN && vpn < (FILESYSTEM_START_VPN + FILESYSTEM_NUM_PAGES)) {
-        //     //printf("pn: %d, bank: %d, vpn: %d, offset in filesystem: %d\n", page, bank, vpn, (vpn - FILESYSTEM_START_VPN) * NAND_BYTES_PER_PAGE);
-        //     FILE *f = fopen("/Users/martijndevos/Documents/generate_nand/filesystem-readonly.img", "rb");
-        //     fseek(f, (vpn - FILESYSTEM_START_VPN) * NAND_BYTES_PER_PAGE, SEEK_SET);
-        //     fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-        //     memset(s->page_spare_buffer, 0, NAND_BYTES_PER_SPARE);
-        //     s->page_spare_buffer[0xA] = 0xFF; // make sure we add the FTL mark to an empty page
-        //     fclose(f);
-        // }
-        {
-            char filename[200];
-            sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d.page", bank, page);
-            struct stat st = {0};
-            if (stat(filename, &st) == -1) {
-                // page storage does not exist - initialize an empty buffer
-                memset(s->page_buffer, 0, NAND_BYTES_PER_PAGE);
-                memset(s->page_spare_buffer, 0, NAND_BYTES_PER_SPARE);
-                s->page_spare_buffer[0xA] = 0xFF; // make sure we add the FTL mark to an empty page
-            }
-            else {
-                FILE *f = fopen(filename, "rb");
-                if (f == NULL) { hw_error("Unable to read file!"); }
-                fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-                fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
-                fclose(f);
-            }
+        char filename[200];
+        sprintf(filename, "%s/bank%d/%d.page", s->nand_path, bank, page);
+        struct stat st = {0};
+        if (stat(filename, &st) == -1) {
+            // page storage does not exist - initialize an empty buffer
+            memset(s->page_buffer, 0, NAND_BYTES_PER_PAGE);
+            memset(s->page_spare_buffer, 0, NAND_BYTES_PER_SPARE);
+            s->page_spare_buffer[0xA] = 0xFF; // make sure we add the FTL mark to an empty page
+        }
+        else {
+            FILE *f = fopen(filename, "rb");
+            if (f == NULL) { hw_error("Unable to read file!"); }
+            fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
+            fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
+            fclose(f);
         }
 
         s->buffered_page = page;
@@ -176,20 +165,11 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
                 // flush the page buffer to the disk
                 uint32_t vpn = s->buffered_page * 8 + s->buffered_bank;
                 //printf("Flushing page %d, bank %d, vpn %d\n", s->buffered_page, s->buffered_bank, vpn);
-                //printf("INIT? %d, pb: %d\n", s->lock.initialized, s->page_buffer);
                 qemu_mutex_lock(&s->lock);
                 qemu_mutex_unlock(&s->lock);
-                // if(vpn >= FILESYSTEM_START_VPN && vpn < (FILESYSTEM_START_VPN + FILESYSTEM_NUM_PAGES)) {
-                //     qemu_mutex_lock(&s->lock);
-                //     FILE *f = fopen("/Users/martijndevos/Documents/generate_nand/filesystem-readonly.img", "rb+");
-                //     fseek(f, (vpn - FILESYSTEM_START_VPN) * NAND_BYTES_PER_PAGE, SEEK_SET);
-                //     fwrite(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-                //     fclose(f);
-                //     qemu_mutex_unlock(&s->lock);
-                // }
                 {
                     char filename[200];
-                    sprintf(filename, "/Users/martijndevos/Documents/generate_nand/nand/bank%d/%d_new.page", s->buffered_bank, s->buffered_page);
+                    sprintf(filename, "%s/bank%d/%d_new.page", s->nand_path, s->buffered_bank, s->buffered_page);
                     FILE *f = fopen(filename, "wb");
                     if (f == NULL) { hw_error("Unable to read file!"); }
                     fwrite(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
@@ -224,11 +204,6 @@ static void itnand_init(Object *obj)
     s->page_spare_buffer = (uint8_t *)malloc(NAND_BYTES_PER_SPARE);
     s->buffered_page = -1;
     s->buffered_bank = -1;
-
-    // FILE *f = fopen("/Users/martijndevos/Documents/generate_nand/filesystem-readonly.img", "rb");
-    // s->filesystem = malloc(NAND_BYTES_PER_PAGE * FILESYSTEM_NUM_PAGES);
-    // fread(s->filesystem, sizeof(char), NAND_BYTES_PER_PAGE * FILESYSTEM_NUM_PAGES - 1, f);
-    // printf("File system in memory\n");
 
     qemu_mutex_init(&s->lock);
 }

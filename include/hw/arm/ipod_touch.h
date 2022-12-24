@@ -169,6 +169,7 @@ typedef struct {
 	ARMCPU *cpu;
 	char bootrom_path[1024];
 	char iboot_path[1024];
+	char nand_path[1024];
 } IPodTouchMachineState;
 
 #endif

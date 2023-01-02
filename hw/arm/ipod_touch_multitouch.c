@@ -221,7 +221,7 @@ static uint32_t ipod_touch_multitouch_transfer(SSIPeripheral *dev, uint32_t valu
         uint32_t data_len = (s->in_buffer[2] << 10) | (s->in_buffer[3] << 2) + 5;
         // extend the lengths of the in/out buffers
         free(s->in_buffer);
-        s->in_buffer = malloc(data_len);
+        s->in_buffer = malloc(data_len + 0x10);
 
         free(s->out_buffer);
         s->out_buffer = malloc(data_len);

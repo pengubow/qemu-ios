@@ -1,7 +1,9 @@
 /*
  * S5L8900 SPI Emulation
  *
- * by cmw
+ * This code is based on:
+ * - https://github.com/TrungNguyen1909/qemu-t8030/blob/master/hw/ssi/apple_spi.c (by TrungNguyen1909)
+ * - https://github.com/danzatt/QEMU-s5l89xx-port/blob/master/hw/s5l8900_spi.c (by cmw)
  */
 
 #include "hw/arm/ipod_touch_spi.h"

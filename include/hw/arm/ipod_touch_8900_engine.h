@@ -44,7 +44,7 @@ static void s5l8900_8900_engine_write(void *opaque, hwaddr offset, uint64_t valu
 	AES_KEY ctx, aes_decrypt_key;
 	uint8_t aes_key[16];
 
-	unsigned char ramdiskKey[32] = "188458A6D15034DFE386F23B61D43774";
+	unsigned char ramdiskKey[33] = "188458A6D15034DFE386F23B61D43774";
 	unsigned char ramdiskiv[1];
 
 	unsigned char keybuf[16];

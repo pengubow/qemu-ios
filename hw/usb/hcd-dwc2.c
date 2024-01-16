@@ -1368,6 +1368,9 @@ static void dwc2_realize(DeviceState *dev, Error **errp)
                                       &dev->mem_reentrancy_guard);
 
     sysbus_init_irq(sbd, &s->irq);
+
+    s->device = DWC2_USB_DEVICE(qdev_new(TYPE_DWC2_USB_DEVICE));
+    s->device->dwc2 = s;
 }
 
 static void dwc2_init(Object *obj)
@@ -1385,6 +1388,56 @@ static void dwc2_init(Object *obj)
     memory_region_init_io(&s->fifos, obj, &dwc2_mmio_hreg2_ops, s,
                           "dwc2-fifo", 64 * KiB);
     memory_region_add_subregion(&s->container, 0x1000, &s->fifos);
+}
+
+static void dwc2_usb_device_realize(USBDevice *dev, Error **errp)
+{
+    dev->speed = USB_SPEED_HIGH;
+    dev->speedmask = USB_SPEED_MASK_HIGH;
+    dev->flags |= (1 << USB_DEV_FLAG_IS_HOST);
+    dev->auto_attach = false;
+}
+
+static void dwc2_usb_device_handle_attach(USBDevice *dev)
+{
+    DWC2DeviceState *udev = DWC2_USB_DEVICE(dev);
+    DWC2State *s = udev->dwc2;
+
+    /* not in host mode */
+    assert(!s->uport.dev);
+
+    s->gotgctl |= GOTGCTL_BSESVLD | GOTGCTL_CONID_B;
+    dwc2_lower_global_irq(s, GINTSTS_CURMODE_HOST);
+    dwc2_raise_global_irq(s, GINTSTS_CONIDSTSCHNG);
+}
+
+static void dwc2_usb_device_handle_detach(USBDevice *dev)
+{
+    DWC2DeviceState *udev = DWC2_USB_DEVICE(dev);
+    DWC2State *s = udev->dwc2;
+
+    s->gotgctl &= ~(GOTGCTL_BSESVLD | GOTGCTL_CONID_B);
+    dwc2_raise_global_irq(s, GINTSTS_CURMODE_HOST | GINTSTS_CONIDSTSCHNG);
+}
+
+static void dwc2_usb_device_handle_reset(USBDevice *dev)
+{
+    DWC2DeviceState *udev = DWC2_USB_DEVICE(dev);
+    DWC2State *s = udev->dwc2;
+
+    s->dcfg &= ~DCFG_DEVADDR_MASK;
+
+    for (int i = 1; i < DWC2_NB_EP; i++) {
+        s->diepctl(i) &= ~DXEPCTL_USBACTEP;
+        s->doepctl(i) &= ~DXEPCTL_USBACTEP;
+    }
+
+    dwc2_raise_global_irq(s, GINTSTS_USBRST);
+}
+
+static void dwc2_usb_device_cancel_packet(USBDevice *dev, USBPacket *p)
+{
+    qemu_log_mask(LOG_UNIMP, "%s\n", __func__);
 }
 
 static const VMStateDescription vmstate_dwc2_state_packet = {
@@ -1448,6 +1501,29 @@ static Property dwc2_usb_properties[] = {
     DEFINE_PROP_END_OF_LIST(),
 };
 
+static void dwc2_usb_device_class_initfn_common(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    USBDeviceClass *uc = USB_DEVICE_CLASS(klass);
+
+    uc->realize        = dwc2_usb_device_realize;
+    uc->product_desc   = "DWC2 USB Device";
+    uc->unrealize      = NULL;
+    uc->cancel_packet  = dwc2_usb_device_cancel_packet;
+    uc->handle_attach  = dwc2_usb_device_handle_attach;
+    //uc->handle_detach  = dwc2_usb_device_handle_detach;
+    uc->handle_reset   = dwc2_usb_device_handle_reset;
+    uc->handle_data    = NULL;
+    uc->handle_control = NULL;
+    //uc->handle_packet  = dwc2_usb_device_handle_packet;
+    uc->flush_ep_queue = NULL;
+    uc->ep_stopped     = NULL;
+    uc->alloc_streams  = NULL;
+    uc->free_streams   = NULL;
+    uc->usb_desc       = NULL;
+    set_bit(DEVICE_CATEGORY_USB, dc->categories);
+}
+
 static void dwc2_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -1462,6 +1538,13 @@ static void dwc2_class_init(ObjectClass *klass, void *data)
                                        dwc2_reset_exit, &c->parent_phases);
 }
 
+static const TypeInfo dwc2_usb_device_type_info = {
+    .name = TYPE_DWC2_USB_DEVICE,
+    .parent = TYPE_USB_DEVICE,
+    .instance_size = sizeof(DWC2DeviceState),
+    .class_init = dwc2_usb_device_class_initfn_common,
+};
+
 static const TypeInfo dwc2_usb_type_info = {
     .name          = TYPE_DWC2_USB,
     .parent        = TYPE_SYS_BUS_DEVICE,
@@ -1473,6 +1556,7 @@ static const TypeInfo dwc2_usb_type_info = {
 
 static void dwc2_usb_register_types(void)
 {
+    type_register_static(&dwc2_usb_device_type_info);
     type_register_static(&dwc2_usb_type_info);
 }
 

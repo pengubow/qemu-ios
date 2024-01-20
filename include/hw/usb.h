@@ -175,6 +175,15 @@
 
 #define USB_INTERFACE_INVALID         255
 
+/* binary representation */
+struct usb_control_packet {
+    uint8_t  bmRequestType;
+    uint8_t  bRequest;
+    uint16_t wValue;
+    uint16_t wIndex;
+    uint16_t wLength;
+} QEMU_PACKED;
+
 typedef struct USBBusOps USBBusOps;
 typedef struct USBPort USBPort;
 typedef struct USBDevice USBDevice;

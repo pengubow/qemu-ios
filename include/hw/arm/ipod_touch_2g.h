@@ -10,6 +10,7 @@
 #include "hw/dma/pl080.h"
 #include "hw/i2c/ipod_touch_i2c.h"
 #include "hw/usb/hcd-dwc2.h"
+#include "hw/usb/hcd-tcp.h"
 #include "hw/arm/ipod_touch_timer.h"
 #include "hw/arm/ipod_touch_clock.h"
 #include "hw/arm/ipod_touch_chipid.h"
@@ -155,7 +156,7 @@ typedef struct {
 	IPodTouchGPIOState *gpio_state;
 	IPodTouchSYSICState *sysic;
 	MemoryRegion usb_dma_container_mr;
-	DWC2State *usb_otg;
+	DWC2State *dwc2;
 	IPodTouchUSBPhysState *usb_phys_state;
 	IPodTouchSHA1State *sha1_state;
 	IPodTouchAESState *aes_state;

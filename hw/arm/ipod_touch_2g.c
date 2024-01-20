@@ -174,13 +174,6 @@ static inline qemu_irq s5l8900_get_irq(IPodTouchMachineState *s, int n)
     return s->irq[n / S5L8720_VIC_SIZE][n % S5L8720_VIC_SIZE];
 }
 
-static uint32_t s5l8720_usb_hwcfg[] = {
-    0,
-    0x7a8f60d0,
-    0x082000e8,
-    0x01f08024
-};
-
 static void ipod_touch_key_event(void *opaque, int keycode)
 {
     bool do_irq = false;
@@ -405,13 +398,21 @@ static void ipod_touch_machine_init(MachineState *machine)
     // init USB OTG
     dev = qdev_new("dwc2-usb");
     DWC2State *dwc2 = DWC2_USB(dev);
-    nms->usb_otg = dwc2;
+    nms->dwc2 = dwc2;
     memory_region_add_subregion(sysmem, USBOTG_MEM_BASE, &dwc2->container);
     // TODO add IRQ etc
     memory_region_init(&nms->usb_dma_container_mr, OBJECT(dev), "appleusb.dma-container-mr", UINT32_MAX);
-    object_property_add_const_link(OBJECT(nms->usb_otg), "dma-mr", OBJECT(&nms->usb_dma_container_mr));
+    object_property_add_const_link(OBJECT(nms->dwc2), "dma-mr", OBJECT(&nms->usb_dma_container_mr));
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_realize(busdev, &error_fatal);
+
+    // create the TCP host and connect the busses
+    dev = qdev_new(TYPE_USB_TCP_HOST);
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_realize(busdev, &error_fatal);
+
+    BusState *bus = QLIST_FIRST(&DEVICE(busdev)->child_bus);
+    qdev_realize(DEVICE(nms->dwc2->device), bus, &error_fatal);
 
     // init two pl080 DMAC0 devices
     dev = qdev_new("pl080");

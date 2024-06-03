@@ -9796,7 +9796,7 @@ void define_one_arm_cp_reg_with_opaque(ARMCPU *cpu,
             break;
         case 6:
             /* min_EL EL3 */
-            mask = PL3_RW;
+            mask = PL1_RW;
             break;
         case 7:
             /* min_EL EL1, secure mode only (we don't check the latter) */

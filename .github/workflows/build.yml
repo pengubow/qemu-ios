@@ -1,0 +1,28 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ubuntu dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install make ninja-build pkg-config libssl-dev libsdl2-dev libpixman-1-dev libpixman-1-0 libglib2.0-dev
+      - name: build
+        run: |
+          mkdir build
+          cd build
+          ../configure --enable-sdl --disable-cocoa --target-list=arm-softmmu --disable-capstone --disable-slirp --extra-cflags=-I/usr/include/openssl --extra-ldflags='-L/usr/lib -lcrypto' --enable-pie --disable-werror
+          make -j8
+          ls ${GITHUB_WORKSPACE}/build/arm-softmmu/
+
+      - uses: actions/upload-artifact@v4
+        with:
+         name: ok
+         path: |
+           build/arm-softmmu/
